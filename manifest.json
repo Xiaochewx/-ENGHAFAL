@@ -1,0 +1,32 @@
+{
+  "name": "不背英语 - 沉浸式背单词",
+  "short_name": "不背英语",
+  "description": "基于艾宾浩斯间隔记忆算法与沉浸式卡片手势交互的英语背单词 Web App",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF7EE",
+  "theme_color": "#C5A059",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
