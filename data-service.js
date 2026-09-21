@@ -73,8 +73,8 @@ const SettingsService = {
  * ---------------- Supabase 云端同步配置与服务 (支持设备级命名空间隔离) ----------------
  */
 const SUPABASE_CONFIG = {
-  url: 'https://abzacuzhggyvlqwwtlyj.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiemFjdXpoZ2d5dmxxd3d0bHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyODE5NzIsImV4cCI6MjEwNDg1Nzk3Mn0.cZ6o_p7maiPH18KtuBBSRWfwDmC8Eb1j6ePIi7aBWuE'
+  url: 'https://ikflvnmqoophvyuypxmb.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZmx2bm1xb29waHZ5dXlweG1iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5ODkyOTgsImV4cCI6MjEwNTU2NTI5OH0.rm9Lr2ZyHKTWbxNG6YcCxIQ2KminiHXNE7OyMBdNwoc'
 };
 
 const SupabaseService = {
@@ -133,7 +133,7 @@ const SupabaseService = {
    */
   async syncWord(word) {
     const client = this.getClient();
-    if (!client || this.connectionState === 'table_missing') return;
+    if (!client || this.connectionState !== 'connected') return;
     try {
       const deviceId = getDeviceId();
       const payload = {
@@ -168,7 +168,7 @@ const SupabaseService = {
    */
   async deleteWord(id) {
     const client = this.getClient();
-    if (!client || this.connectionState === 'table_missing') return;
+    if (!client || this.connectionState !== 'connected') return;
     try {
       const deviceId = getDeviceId();
       await client.from('words').delete().eq('id', `${deviceId}_${id}`);
@@ -182,7 +182,7 @@ const SupabaseService = {
    */
   async syncStats(stats) {
     const client = this.getClient();
-    if (!client || this.connectionState === 'table_missing') return;
+    if (!client || this.connectionState !== 'connected') return;
     try {
       const deviceId = getDeviceId();
       const payload = {
@@ -599,7 +599,8 @@ const DataService = {
     if (!item) return false;
     item.isStarred = !item.isStarred;
     item.lastModifiedAt = Date.now();
-    await this._persistWords(list);
+    this._cachedWords = list;
+    await IdbStorage.putWord(item);
     SupabaseService.syncWord(item).catch(() => {});
     return item.isStarred;
   },
@@ -716,7 +717,8 @@ const DataService = {
     };
 
     list.push(newWord);
-    await this._persistWords(list);
+    this._cachedWords = list;
+    await IdbStorage.putWord(newWord);
     SupabaseService.syncWord(newWord).catch(() => {});
     return newWord;
   },
@@ -742,7 +744,8 @@ const DataService = {
     };
 
     list[index] = updatedItem;
-    await this._persistWords(list);
+    this._cachedWords = list;
+    await IdbStorage.putWord(updatedItem);
     SupabaseService.syncWord(updatedItem).catch(() => {});
     return updatedItem;
   },
@@ -767,25 +770,26 @@ const DataService = {
     };
 
     list[index] = updated;
-    await this._persistWords(list);
+    this._cachedWords = list;
+    await IdbStorage.putWord(updated);
     SupabaseService.syncWord(updated).catch(() => {});
     return updated;
   },
 
   /**
-   * 删除指定单词（级联同步 IndexedDB、LocalStorage 与 Supabase）
+   * 删除指定单词（级联同步 IndexedDB 与 Supabase）
    * @param {string} id 单词唯一标识
    * @returns {Promise<boolean>} 是否删除成功
    */
   async deleteWord(id) {
     const list = await this.getWords();
-    const filtered = list.filter(item => item.id !== id);
-
-    if (filtered.length === list.length) {
+    const index = list.findIndex(item => item.id === id);
+    if (index === -1) {
       return false;
     }
 
-    await this._persistWords(filtered);
+    list.splice(index, 1);
+    this._cachedWords = list;
     await IdbStorage.deleteWord(id);
     SupabaseService.deleteWord(id).catch(() => {});
     return true;

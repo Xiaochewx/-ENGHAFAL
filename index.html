@@ -1499,7 +1499,7 @@
       <div class="my-4 p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 text-xs space-y-2">
         <div class="flex items-center justify-between">
           <span class="text-zinc-500 dark:text-zinc-400">项目终端:</span>
-          <span class="font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">abzacuzhggyvlqwwtlyj.supabase.co</span>
+          <span class="font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">ikflvnmqoophvyuypxmb.supabase.co</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-zinc-500 dark:text-zinc-400">连接状态:</span>
@@ -1561,10 +1561,11 @@
         <p class="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2">
           如果提示“数据表尚未初始化”，只需复制下方 SQL，粘贴至 Supabase 控制台的 <b>SQL Editor</b> 中点击 <b>Run</b> 即可完成一键建表：
         </p>
-        <pre class="p-3 rounded-xl bg-zinc-900 text-zinc-300 font-mono text-[10px] leading-relaxed overflow-x-auto max-h-36 border border-zinc-800 select-all" id="sql-code-block"><code>-- 1. 创建单词主表 (支持多设备隔离 & 标星收藏)
+        <pre class="p-3 rounded-xl bg-zinc-900 text-zinc-300 font-mono text-[10px] leading-relaxed overflow-x-auto max-h-36 border border-zinc-800 select-all" id="sql-code-block"><code>-- 1. 创建单词主表 (以全局唯一 id 为主键，支持 upsert 与多设备隔离)
 create table if not exists public.words (
-  id text not null,
+  id text primary key,
   device_id text default 'default_device',
+  word_id text,
   word text not null,
   phonetic text default '',
   "partOfSpeech" text default 'n.',
@@ -1580,9 +1581,10 @@ create table if not exists public.words (
   "userNotes" text default '',
   "createdAt" bigint,
   "lastModifiedAt" bigint,
-  "isStarred" boolean default false,
-  primary key (id, device_id)
+  "isStarred" boolean default false
 );
+
+create index if not exists idx_words_device on public.words (device_id);
 
 -- 2. 创建打卡统计表 (多设备隔离)
 create table if not exists public.study_stats (
@@ -2083,7 +2085,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       flashcard.classList.remove('rotate-y-180');
       renderCurrentWord();
       updateProgress();
-      renderLibraryView();
+      if (currentTab === 'library') renderLibraryView();
       HapticService.light();
       showToast(`已撤回对 "${wordSnapshot.word}" 的判定`, '↩️');
     }
@@ -2146,7 +2148,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       updateCardStarUI(isStarred);
       HapticService.light();
       showToast(isStarred ? `已将 "${item.word}" 加入标星收藏 ⭐` : `已取消 "${item.word}" 标星收藏`, '⭐');
-      renderLibraryView();
+      if (currentTab === 'library') renderLibraryView();
     }
 
     // 初始化界面渲染
@@ -2794,8 +2796,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         Object.assign(allVocabulary[allIdx], updates);
       }
 
-      // 2. 异步持久化至数据层
-      await DataService.updateWord(currentItem.id, updates);
+      // 2. 异步持久化至数据层 (非阻塞乐观更新，流畅转场)
+      DataService.updateWord(currentItem.id, updates).catch(err => console.error(err));
 
       // 3. 核心闭环：将该词从当前位置移至待学队列末尾，稍后再次复习
       const isLastRemaining = (practiceQueue.length - currentIndex) <= 1;
@@ -2820,7 +2822,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       isFlipped = false;
       setTimeout(() => {
         renderCurrentWord();
-        renderLibraryView();
+        if (currentTab === 'library') renderLibraryView();
         if (currentTab === 'stats') renderStatsView();
       }, 250);
     });
@@ -2848,8 +2850,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         Object.assign(allVocabulary[allIdx], updates);
       }
 
-      // 2. 异步持久化至数据层
-      await DataService.updateWord(currentItem.id, updates);
+      // 2. 异步持久化至数据层 (非阻塞乐观更新，即刻切词)
+      DataService.updateWord(currentItem.id, updates).catch(err => console.error(err));
 
       completedTodayCount++;
 
@@ -2870,7 +2872,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       isFlipped = false;
       setTimeout(() => {
         renderCurrentWord();
-        renderLibraryView();
+        if (currentTab === 'library') renderLibraryView();
         if (currentTab === 'stats') renderStatsView();
       }, 250);
     });
@@ -4196,22 +4198,40 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       }
     });
 
-    // 2. 渲染词库管理页面
+    // 2. 渲染词库管理页面 (单循环极速处理，避免多重遍历)
     function renderLibraryView() {
       tabLibraryBadge.textContent = allVocabulary.length;
+      if (currentTab !== 'library') return;
 
       // 计算今日临界时间戳
       const endOfToday = new Date();
       endOfToday.setHours(23, 59, 59, 999);
       const threshold = endOfToday.getTime();
 
-      // 更新状态分类计数值
+      // 单次循环统计各状态计数与标签集合，消除重复全库遍历
       const totalAll = allVocabulary.length;
-      const totalDue = allVocabulary.filter(i => !i.nextReviewDate || Number(i.nextReviewDate) <= threshold).length;
-      const totalNew = allVocabulary.filter(i => i.status === 'new').length;
-      const totalLearning = allVocabulary.filter(i => i.status === 'learning').length;
-      const totalMastered = allVocabulary.filter(i => i.status === 'mastered').length;
-      const totalStarred = allVocabulary.filter(i => i.isStarred).length;
+      let totalDue = 0;
+      let totalNew = 0;
+      let totalLearning = 0;
+      let totalMastered = 0;
+      let totalStarred = 0;
+      const tagSet = new Set();
+
+      for (let i = 0; i < totalAll; i++) {
+        const item = allVocabulary[i];
+        if (!item.nextReviewDate || Number(item.nextReviewDate) <= threshold) totalDue++;
+        if (item.status === 'mastered') totalMastered++;
+        else if (item.status === 'learning') totalLearning++;
+        else totalNew++;
+        if (item.isStarred) totalStarred++;
+
+        if (Array.isArray(item.tags)) {
+          for (let t = 0; t < item.tags.length; t++) {
+            const tag = item.tags[t];
+            if (tag) tagSet.add(tag.trim());
+          }
+        }
+      }
 
       countStatusAll.textContent = totalAll;
       const countStatusDue = document.getElementById('count-status-due');
@@ -4222,13 +4242,6 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       const countStatusStarred = document.getElementById('count-status-starred');
       if (countStatusStarred) countStatusStarred.textContent = totalStarred;
 
-      // 提取所有不重复的标签
-      const tagSet = new Set();
-      allVocabulary.forEach(item => {
-        if (Array.isArray(item.tags)) {
-          item.tags.forEach(t => t && tagSet.add(t.trim()));
-        }
-      });
       const allTags = Array.from(tagSet);
 
       // 渲染标签筛选栏
