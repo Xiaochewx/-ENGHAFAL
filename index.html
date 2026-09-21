@@ -324,13 +324,22 @@
             <!-- ==================== 卡片正面 (Front) ==================== -->
             <div class="card-front absolute inset-0 w-full h-full backface-hidden bg-white/95 dark:bg-zinc-850/95 border border-zinc-200/80 dark:border-zinc-750/70 rounded-3xl p-6 sm:p-7 shadow-card-diffuse dark:shadow-card-diffuse-dark backdrop-blur-sm flex flex-col justify-between">
               
-              <!-- 正面顶部：分类标签与序号 -->
+              <!-- 正面顶部：分类标签、星标收藏与序号 -->
               <div class="flex items-center justify-between">
-                <div id="front-tags-container" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold-100/70 dark:bg-gold-950/60 border border-gold-300/40 dark:border-gold-800/50">
-                  <svg class="w-3.5 h-3.5 text-gold-500 fill-gold-500" viewBox="0 0 24 24">
-                    <path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"/>
-                  </svg>
-                  <span id="front-tag" class="text-xs font-medium text-gold-700 dark:text-gold-300">日常口语</span>
+                <div class="flex items-center gap-2">
+                  <div id="front-tags-container" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold-100/70 dark:bg-gold-950/60 border border-gold-300/40 dark:border-gold-800/50">
+                    <svg class="w-3.5 h-3.5 text-gold-500 fill-gold-500" viewBox="0 0 24 24">
+                      <path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"/>
+                    </svg>
+                    <span id="front-tag" class="text-xs font-medium text-gold-700 dark:text-gold-300">日常口语</span>
+                  </div>
+                  <!-- 星标收藏按钮 (快捷键: S) -->
+                  <button id="star-card-btn" type="button" aria-label="收藏生词" title="收藏生词 (快捷键: S)" 
+                          class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 transition-all active:scale-90">
+                    <svg id="star-card-icon" class="w-4 h-4 fill-none stroke-current stroke-[2.2] transition-colors" viewBox="0 0 24 24">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </button>
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span id="front-srs-badge" class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-300/30">今日待复习</span>
@@ -375,13 +384,19 @@
             <!-- ==================== 卡片背面 (Back) ==================== -->
             <div class="card-back absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-white/95 dark:bg-zinc-850/95 border border-zinc-200/80 dark:border-zinc-750/70 rounded-3xl p-6 sm:p-7 shadow-card-diffuse dark:shadow-card-diffuse-dark backdrop-blur-sm flex flex-col justify-between">
               
-              <!-- 背面顶部：单词概览与状态提示 -->
+              <!-- 背面顶部：单词概览、星标与状态提示 -->
               <div class="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-700/40 pb-3">
                 <div class="flex items-baseline gap-2">
                   <span id="back-word" class="font-serif font-bold text-lg text-zinc-900 dark:text-zinc-100">vibe</span>
                   <span id="back-pos" class="text-xs font-serif italic text-zinc-500">n.</span>
                 </div>
                 <div class="flex items-center gap-2">
+                  <button id="star-card-back-btn" type="button" aria-label="收藏生词" title="收藏生词 (快捷键: S)" 
+                          class="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-300 dark:text-zinc-600 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 transition-all active:scale-90 mr-0.5">
+                    <svg id="star-card-back-icon" class="w-3.5 h-3.5 fill-none stroke-current stroke-[2.2] transition-colors" viewBox="0 0 24 24">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </button>
                   <span id="back-srs-stage" class="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">阶段: 0天</span>
                   <span class="text-[11px] font-medium text-gold-600 dark:text-gold-400">释义与例句</span>
                 </div>
@@ -474,13 +489,18 @@
               太棒了！今天没有待到期的复习单词，你的记忆状态非常棒。
             </p>
             
-            <div class="flex flex-col sm:flex-row gap-2.5 w-full max-w-xs">
-              <button id="practice-all-btn" type="button" class="flex-1 py-2.5 px-3 rounded-xl bg-gold-500 hover:bg-gold-600 text-white font-semibold text-xs sm:text-sm shadow-gold-subtle transition-all active:scale-[0.98]">
-                自由练习全部词汇
+            <div class="flex flex-col gap-2 w-full max-w-xs">
+              <button id="practice-starred-btn" type="button" class="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold text-xs sm:text-sm border border-amber-300/40 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5">
+                <span>⭐</span> 专项复习星标生词 (<span id="completed-starred-count">0</span>)
               </button>
-              <button id="add-new-from-completed-btn" type="button" class="py-2.5 px-4 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-xs sm:text-sm transition-all active:scale-[0.98]">
-                + 录入新词
-              </button>
+              <div class="flex gap-2">
+                <button id="practice-all-btn" type="button" class="flex-1 py-2.5 px-3 rounded-xl bg-gold-500 hover:bg-gold-600 text-white font-semibold text-xs sm:text-sm shadow-gold-subtle transition-all active:scale-[0.98]">
+                  自由练习全部词汇
+                </button>
+                <button id="add-new-from-completed-btn" type="button" class="py-2.5 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-xs sm:text-sm transition-all active:scale-[0.98]">
+                  + 录入新词
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -902,6 +922,10 @@
                   class="status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 text-center">
             已掌握 (<span id="count-status-mastered">0</span>)
           </button>
+          <button type="button" data-status-filter="starred" 
+                  class="status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all text-amber-600 dark:text-amber-400 hover:text-amber-700 font-semibold text-center" title="仅看已收藏星标生词">
+            ⭐ (<span id="count-status-starred">0</span>)
+          </button>
         </div>
 
         <!-- 动态标签横向滚动过滤栏 -->
@@ -1141,13 +1165,13 @@
               <p class="text-[10px] text-zinc-400 mt-0.5">收集荣誉勋章 · 点亮坚持的每一个里程碑</p>
             </div>
             <span id="stats-showcase-count" class="text-[11px] px-2.5 py-0.5 rounded-full bg-gold-100/80 dark:bg-gold-950/60 text-gold-700 dark:text-gold-300 font-bold font-mono border border-gold-300/40 dark:border-gold-800/40">
-              已点亮 0/6
+              已点亮 0/8
             </span>
           </div>
 
-          <!-- 6 个成就卡片网格 (2 列响应式布局) -->
+          <!-- 8 个成就卡片网格 (2 列响应式布局) -->
           <div id="stats-achievements-grid" class="grid grid-cols-2 gap-2.5 pt-1">
-            <!-- 由 JS 动态渲染 6 枚成就徽章 -->
+            <!-- 由 JS 动态渲染 8 枚成就徽章 -->
           </div>
         </div>
 
@@ -1535,9 +1559,10 @@
         <p class="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2">
           如果提示“数据表尚未初始化”，只需复制下方 SQL，粘贴至 Supabase 控制台的 <b>SQL Editor</b> 中点击 <b>Run</b> 即可完成一键建表：
         </p>
-        <pre class="p-3 rounded-xl bg-zinc-900 text-zinc-300 font-mono text-[10px] leading-relaxed overflow-x-auto max-h-32 border border-zinc-800 select-all" id="sql-code-block"><code>-- 1. 创建单词主表
+        <pre class="p-3 rounded-xl bg-zinc-900 text-zinc-300 font-mono text-[10px] leading-relaxed overflow-x-auto max-h-36 border border-zinc-800 select-all" id="sql-code-block"><code>-- 1. 创建单词主表 (支持多设备隔离 & 标星收藏)
 create table if not exists public.words (
-  id text primary key,
+  id text not null,
+  device_id text default 'default_device',
   word text not null,
   phonetic text default '',
   "partOfSpeech" text default 'n.',
@@ -1552,12 +1577,15 @@ create table if not exists public.words (
   "lastReviewedAt" bigint,
   "userNotes" text default '',
   "createdAt" bigint,
-  "lastModifiedAt" bigint
+  "lastModifiedAt" bigint,
+  "isStarred" boolean default false,
+  primary key (id, device_id)
 );
 
--- 2. 创建打卡统计表
+-- 2. 创建打卡统计表 (多设备隔离)
 create table if not exists public.study_stats (
-  id text primary key default 'global_user_stats',
+  id text primary key default 'default_device',
+  device_id text default 'default_device',
   "dailyCounts" jsonb default '{}'::jsonb,
   "checkInDates" jsonb default '[]'::jsonb,
   "bestStreak" integer default 0,
@@ -1568,7 +1596,9 @@ create table if not exists public.study_stats (
 -- 3. 开启权限策略
 alter table public.words enable row level security;
 alter table public.study_stats enable row level security;
+drop policy if exists "Allow public words" on public.words;
 create policy "Allow public words" on public.words for all using (true) with check (true);
+drop policy if exists "Allow public stats" on public.study_stats;
 create policy "Allow public stats" on public.study_stats for all using (true) with check (true);</code></pre>
       </div>
 
@@ -1603,48 +1633,123 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       </div>
 
       <div class="my-4 space-y-4">
-        <!-- 存储与词库信息 -->
-        <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 text-xs">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-zinc-500 dark:text-zinc-400 font-medium">持久化存储引擎:</span>
-            <span class="font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-300/40">IndexedDB (海量无上限)</span>
+        <!-- 学习规划与目标设置 -->
+        <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 space-y-3">
+          <h4 class="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+            <span>🎯</span> 学习规划与词书分级
+          </h4>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label for="settings-daily-limit" class="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">每日新学单词数</label>
+              <select id="settings-daily-limit" class="w-full text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-gold-500 outline-none">
+                <option value="10">10 词 / 天 (轻松自律)</option>
+                <option value="20" selected>20 词 / 天 (稳步进阶·推荐)</option>
+                <option value="30">30 词 / 天 (冲刺备考)</option>
+                <option value="50">50 词 / 天 (高强集训)</option>
+                <option value="100">100 词 / 天 (极限刷词)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="settings-study-band" class="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">当前学习词库分级</label>
+              <select id="settings-study-band" class="w-full text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-gold-500 outline-none">
+                <option value="all" selected>全量词库 (5998词 · 综合强化)</option>
+                <option value="band4-5">初中级核心 (Band 4-5 · 基础必备)</option>
+                <option value="band6-7">四六级/考研 (Band 6-7 · 进阶高频)</option>
+                <option value="band8-9">雅思7+/GRE (Band 8-9 · 巅峰深造)</option>
+                <option value="starred">仅我的标星生词本 (⭐ 重点难词)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 语音与发音偏好 -->
+        <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 space-y-3">
+          <h4 class="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+            <span>🔊</span> 发音与音效偏好
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+            <div>
+              <label for="settings-accent" class="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1">发音口音引擎</label>
+              <select id="settings-accent" class="w-full text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 focus:ring-2 focus:ring-gold-500 outline-none">
+                <option value="us" selected>美式发音 (US · 地道真人)</option>
+                <option value="uk">英式发音 (UK · 纯正真人)</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-700/60">
+              <span class="text-xs font-medium text-zinc-700 dark:text-zinc-300">切换卡片自动读音</span>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="settings-auto-pronounce" class="sr-only peer">
+                <div class="w-9 h-5 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gold-500"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 存储与独立设备同步码 -->
+        <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 text-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium">持久化存储:</span>
+            <span class="font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-300/40">IndexedDB (海量极速)</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-zinc-500 dark:text-zinc-400 font-medium">当前词库总量:</span>
             <span id="settings-word-count" class="font-mono font-bold text-zinc-800 dark:text-zinc-200">5,998 词</span>
           </div>
+          <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium">设备独立标识码:</span>
+            <div class="flex items-center gap-1.5">
+              <span id="settings-device-id" class="font-mono text-[10px] font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-200/70 dark:bg-zinc-700/60 px-1.5 py-0.5 rounded">...</span>
+              <button id="settings-copy-device-id-btn" type="button" class="text-[10px] text-gold-600 hover:text-gold-500 font-bold px-1 py-0.5">复制</button>
+            </div>
+          </div>
         </div>
 
-        <!-- 备份与恢复管理 -->
+        <!-- 备份与导出管理 -->
         <div class="space-y-2">
           <h4 class="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-            <span>💾</span> 数据备份与恢复
+            <span>💾</span> 数据备份、导出与同步
           </h4>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-3 gap-2">
             <button id="settings-export-btn" type="button" 
-                    class="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
-              <div class="flex items-center gap-2 mb-1">
-                <svg class="w-4 h-4 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    class="p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">导出备份</span>
+                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">JSON备份</span>
               </div>
-              <p class="text-[10px] text-zinc-400">下载当前词库 JSON 档案</p>
+              <p class="text-[10px] text-zinc-400 truncate">下载完整进度</p>
             </button>
 
             <button id="settings-import-btn" type="button" 
-                    class="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
-              <div class="flex items-center gap-2 mb-1">
-                <svg class="w-4 h-4 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    class="p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">导入恢复</span>
+                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">恢复备份</span>
               </div>
-              <p class="text-[10px] text-zinc-400">上传恢复词库备份档案</p>
+              <p class="text-[10px] text-zinc-400 truncate">上传历史文件</p>
+            </button>
+
+            <button id="settings-export-anki-btn" type="button" 
+                    class="p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
+              <div class="flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                  <line x1="9" y1="9" x2="15" y2="15"></line>
+                  <line x1="15" y1="9" x2="9" y2="15"></line>
+                </svg>
+                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">导出 Anki</span>
+              </div>
+              <p class="text-[10px] text-zinc-400 truncate">制卡包 (.txt)</p>
             </button>
           </div>
 
@@ -1656,7 +1761,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
               </div>
               <div>
                 <h5 class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Supabase 云端同步管理</h5>
-                <p class="text-[10px] text-zinc-400">跨设备同步背词记录与复习排期</p>
+                <p class="text-[10px] text-zinc-400">跨设备同步背词记录与复习排期 (独立设备隔离保护)</p>
               </div>
             </div>
             <span class="text-xs text-gold-600 dark:text-gold-400 font-medium">查看 →</span>
@@ -1983,6 +2088,65 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
     btnUndo?.addEventListener('click', handleUndo);
 
+    // 卡片标星收藏 UI 状态同步
+    function updateCardStarUI(isStarred) {
+      const starIcon = document.getElementById('star-card-icon');
+      const starBackIcon = document.getElementById('star-card-back-icon');
+      const starBtn = document.getElementById('star-card-btn');
+      const starBackBtn = document.getElementById('star-card-back-btn');
+
+      if (isStarred) {
+        if (starIcon) {
+          starIcon.classList.remove('fill-none');
+          starIcon.classList.add('fill-amber-400', 'text-amber-500');
+        }
+        if (starBackIcon) {
+          starBackIcon.classList.remove('fill-none');
+          starBackIcon.classList.add('fill-amber-400', 'text-amber-500');
+        }
+        if (starBtn) {
+          starBtn.classList.remove('text-zinc-300', 'dark:text-zinc-600');
+          starBtn.classList.add('text-amber-500');
+        }
+        if (starBackBtn) {
+          starBackBtn.classList.remove('text-zinc-300', 'dark:text-zinc-600');
+          starBackBtn.classList.add('text-amber-500');
+        }
+      } else {
+        if (starIcon) {
+          starIcon.classList.remove('fill-amber-400', 'text-amber-500');
+          starIcon.classList.add('fill-none');
+        }
+        if (starBackIcon) {
+          starBackIcon.classList.remove('fill-amber-400', 'text-amber-500');
+          starBackIcon.classList.add('fill-none');
+        }
+        if (starBtn) {
+          starBtn.classList.remove('text-amber-500');
+          starBtn.classList.add('text-zinc-300', 'dark:text-zinc-600');
+        }
+        if (starBackBtn) {
+          starBackBtn.classList.remove('text-amber-500');
+          starBackBtn.classList.add('text-zinc-300', 'dark:text-zinc-600');
+        }
+      }
+    }
+
+    async function toggleCurrentWordStar() {
+      const item = practiceQueue[currentIndex];
+      if (!item) return;
+      const isStarred = await DataService.toggleStar(item.id);
+      item.isStarred = isStarred;
+      const allIdx = allVocabulary.findIndex(w => w.id === item.id);
+      if (allIdx !== -1) {
+        allVocabulary[allIdx].isStarred = isStarred;
+      }
+      updateCardStarUI(isStarred);
+      HapticService.light();
+      showToast(isStarred ? `已将 "${item.word}" 加入标星收藏 ⭐` : `已取消 "${item.word}" 标星收藏`, '⭐');
+      renderLibraryView();
+    }
+
     // 初始化界面渲染
     function renderCurrentWord() {
       if (practiceQueue.length === 0 || currentIndex >= practiceQueue.length) {
@@ -2017,6 +2181,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         frontSrsBadge.textContent = intervalText;
         frontSrsBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-medium ${dueInfo.badgeClass}`;
       }
+
+      // 同步卡片正面与背面星标状态
+      updateCardStarUI(!!item.isStarred);
 
       // 渲染背面
       backWord.textContent = item.word;
@@ -2065,6 +2232,16 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       resetCardTransform(false);
 
       updateProgress();
+
+      // 自动发音偏好支持：卡片展现时自动朗读真人发音
+      const settings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : null;
+      if (settings && settings.autoPronounce && item.word) {
+        setTimeout(() => {
+          if (practiceQueue[currentIndex]?.id === item.id && !isFlipped) {
+            AudioService.speak(item.word, pronounceBtn, 0.85);
+          }
+        }, 100);
+      }
     }
 
     // 更新底部进度条
@@ -2109,6 +2286,12 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         completedDesc.textContent = `太棒了！你已完成今日全部 ${completedTodayCount} 个待复习单词。坚持按 SRS 节奏复习，记忆更牢固！`;
       }
 
+      const completedStarredCountEl = document.getElementById('completed-starred-count');
+      if (completedStarredCountEl) {
+        const starCount = allVocabulary.filter(w => w.isStarred).length;
+        completedStarredCountEl.textContent = starCount;
+      }
+
       updateProgress();
     }
 
@@ -2141,7 +2324,6 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
           if (this.isSupported()) navigator.vibrate(45);
         } catch (e) {}
       },
-      // 达成 5 词打卡、成就解锁的高光欢庆震动 (轻快三段节奏: 30ms, 40ms, 30ms, 40ms, 60ms)
       celebrate() {
         try {
           if (this.isSupported()) navigator.vibrate([30, 40, 30, 40, 60]);
@@ -2149,116 +2331,151 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       }
     };
 
-    /* ---------------- 4. 原生语音合成服务 (SpeechSynthesis) ---------------- */
+    /* ---------------- 4. 双轨语音合成服务 (Youdao 原声发音 + SpeechSynthesis 智能回退) ---------------- */
     const AudioService = {
       activeUtterance: null,
+      activeAudio: null,
       activeBtn: null,
       cachedVoices: [],
+      unlocked: false,
 
       init() {
-        if (!('speechSynthesis' in window)) {
-          console.warn('当前浏览器环境不支持 window.speechSynthesis');
-          return;
-        }
-
-        const updateVoices = () => {
-          this.cachedVoices = window.speechSynthesis.getVoices();
-        };
-
-        updateVoices();
-        // 兼容 Chrome/Edge 异步加载 voices 的生命周期
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {
-          window.speechSynthesis.onvoiceschanged = updateVoices;
+        if ('speechSynthesis' in window) {
+          const updateVoices = () => {
+            this.cachedVoices = window.speechSynthesis.getVoices();
+          };
+          updateVoices();
+          if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = updateVoices;
+          }
         }
       },
 
       /**
-       * 优选高质量美音 (en-US) 或英音 (en-GB)
+       * 根据当前设置优选美音 (en-US) 或英音 (en-GB)
        */
-      getBestVoice() {
-        if (!this.cachedVoices || this.cachedVoices.length === 0) {
-          this.cachedVoices = window.speechSynthesis.getVoices();
-        }
+      getBestVoice(accent = 'us') {
         const voices = this.cachedVoices || [];
         if (voices.length === 0) return null;
 
-        // 1. 优先匹配美音自然/高品质人声（Google US English, Samantha, Jenny, Ava, Natural 等）
-        const premiumUS = voices.find(v => 
-          (v.lang === 'en-US' || v.lang === 'en_US') && 
-          /natural|google|samantha|ava|jenny|premium|alloy/i.test(v.name)
-        );
-        if (premiumUS) return premiumUS;
+        if (accent === 'uk') {
+          const premiumGB = voices.find(v => 
+            (v.lang === 'en-GB' || v.lang === 'en_GB') && 
+            /natural|google|daniel|oliver|serena|george/i.test(v.name)
+          );
+          if (premiumGB) return premiumGB;
+          const standardGB = voices.find(v => v.lang === 'en-GB' || v.lang === 'en_GB' || v.lang.startsWith('en-GB'));
+          if (standardGB) return standardGB;
+        } else {
+          const premiumUS = voices.find(v => 
+            (v.lang === 'en-US' || v.lang === 'en_US') && 
+            /natural|google|samantha|ava|jenny|premium|alloy/i.test(v.name)
+          );
+          if (premiumUS) return premiumUS;
+          const standardUS = voices.find(v => v.lang === 'en-US' || v.lang === 'en_US' || v.lang.startsWith('en-US'));
+          if (standardUS) return standardUS;
+        }
 
-        // 2. 匹配标准 en-US 人声
-        const standardUS = voices.find(v => v.lang === 'en-US' || v.lang === 'en_US' || v.lang.startsWith('en-US'));
-        if (standardUS) return standardUS;
-
-        // 3. 匹配英音自然/高品质人声 (Daniel, Oliver, Serena 等)
-        const premiumGB = voices.find(v => 
-          (v.lang === 'en-GB' || v.lang === 'en_GB') && 
-          /natural|google|daniel|oliver|serena/i.test(v.name)
-        );
-        if (premiumGB) return premiumGB;
-
-        // 4. 匹配标准 en-GB 人声
-        const standardGB = voices.find(v => v.lang === 'en-GB' || v.lang === 'en_GB' || v.lang.startsWith('en-GB'));
-        if (standardGB) return standardGB;
-
-        // 5. 回退到任意英语声音
         return voices.find(v => v.lang.toLowerCase().startsWith('en')) || null;
       },
 
-      unlocked: false,
-
       /**
-       * 移动端与桌面端交互时静音解锁 Web Speech API
+       * 首次交互手势静音解锁 Web Speech API
        */
       unlockAudio() {
-        if (!('speechSynthesis' in window) || this.unlocked) return;
+        if (this.unlocked) return;
         try {
-          const silentUtterance = new SpeechSynthesisUtterance('');
-          silentUtterance.volume = 0;
-          window.speechSynthesis.speak(silentUtterance);
+          if ('speechSynthesis' in window) {
+            const silentUtterance = new SpeechSynthesisUtterance('');
+            silentUtterance.volume = 0;
+            window.speechSynthesis.speak(silentUtterance);
+          }
           this.unlocked = true;
         } catch (e) {}
       },
 
+      stopAll() {
+        if (this.activeAudio) {
+          try {
+            this.activeAudio.pause();
+            this.activeAudio.currentTime = 0;
+          } catch (e) {}
+          this.activeAudio = null;
+        }
+        if ('speechSynthesis' in window) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch (e) {}
+        }
+        this.resetButtonState();
+      },
+
       /**
-       * 核心朗读函数
-       * @param {string} text - 朗读文本
-       * @param {HTMLElement} [buttonEl] - 触发发音的按钮元素（用于显示播放状态）
-       * @param {number} [rate=0.88] - 语速
+       * 核心朗读函数（优先双轨在线真人，离线/长句无缝回退）
        */
       speak(text, buttonEl = null, rate = 0.88) {
-        if (!('speechSynthesis' in window)) return;
-
-        // 1. 防重叠防护：若当前有正在朗读的内容，先立即中断并重置前一个按钮状态
-        window.speechSynthesis.cancel();
-        this.resetButtonState();
-
         if (!text || !text.trim()) return;
+        this.stopAll();
 
-        // 清理例句可能包含的多余双引号，保证发音自然
         const cleanText = text.replace(/["“”]/g, '').trim();
+        const settings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : { accent: 'us' };
+        const accent = settings.accent || 'us';
 
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        const bestVoice = this.getBestVoice();
-
-        if (bestVoice) {
-          utterance.voice = bestVoice;
-          utterance.lang = bestVoice.lang || 'en-US';
-        } else {
-          utterance.lang = 'en-US';
-        }
-
-        utterance.rate = rate;   // 0.88 适中偏缓，方便听清发音细节
-        utterance.pitch = 1.0;  // 自然基调
-
-        // 2. 视觉反馈：播放时激活跳动/强调效果
         if (buttonEl) {
           this.activeBtn = buttonEl;
           buttonEl.classList.add('text-gold-600', 'scale-125', 'animate-pulse');
         }
+
+        // 纯单词 (无空格，长度适中)：优先走有道真人发音服务 (type=1 英音, type=2 美音)
+        const isSingleWord = !/\s/.test(cleanText) && cleanText.length < 35;
+        if (isSingleWord) {
+          const type = accent === 'uk' ? 1 : 2;
+          const audioUrl = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanText)}&type=${type}`;
+          const audio = new Audio(audioUrl);
+          this.activeAudio = audio;
+
+          let hasEnded = false;
+          const finish = () => {
+            if (hasEnded) return;
+            hasEnded = true;
+            this.resetButtonState();
+            this.activeAudio = null;
+          };
+
+          audio.onended = finish;
+          audio.onerror = () => {
+            this.speakWithSpeechSynthesis(cleanText, buttonEl, rate, accent);
+          };
+
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              this.speakWithSpeechSynthesis(cleanText, buttonEl, rate, accent);
+            });
+          }
+        } else {
+          // 长句子 / 例句：走 SpeechSynthesis 朗读
+          this.speakWithSpeechSynthesis(cleanText, buttonEl, rate, accent);
+        }
+      },
+
+      speakWithSpeechSynthesis(cleanText, buttonEl, rate, accent) {
+        if (!('speechSynthesis' in window)) {
+          this.resetButtonState();
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        const bestVoice = this.getBestVoice(accent);
+        if (bestVoice) {
+          utterance.voice = bestVoice;
+          utterance.lang = bestVoice.lang || (accent === 'uk' ? 'en-GB' : 'en-US');
+        } else {
+          utterance.lang = accent === 'uk' ? 'en-GB' : 'en-US';
+        }
+
+        utterance.rate = rate;
+        utterance.pitch = 1.0;
 
         const handleFinish = () => {
           this.resetButtonState();
@@ -2267,17 +2484,12 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
         utterance.onend = handleFinish;
         utterance.onerror = (e) => {
-          console.warn('SpeechSynthesis 朗读被中断或发生异常:', e);
-          if (e.error === 'network') {
-            showToast('发音网络请求超时，请检查网络或离线语音包', '⚠️');
-          }
+          console.warn('SpeechSynthesis 异常:', e);
           handleFinish();
         };
 
-        // 3. 规避 Chrome V8 垃圾回收 bug（GC 回收 utterance 会导致长句中途被切断）
         this.activeUtterance = utterance;
 
-        // 4. 修复 iOS Safari 偶然的 paused 假死状态
         if (window.speechSynthesis.paused) {
           window.speechSynthesis.resume();
         }
@@ -2507,12 +2719,39 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       showToast(`已载入全部 ${practiceQueue.length} 个词汇开始自由练习`, '📖');
     });
 
+    const practiceStarredBtn = document.getElementById('practice-starred-btn');
+    practiceStarredBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const starredWords = allVocabulary.filter(w => w.isStarred);
+      if (starredWords.length === 0) {
+        showToast('当前标星生词本为空，可在学习卡片或词库中点击 ⭐ 收藏难词', '💡');
+        return;
+      }
+      practiceQueue = [...starredWords];
+      isFreePracticeMode = true;
+      initialDueCount = practiceQueue.length;
+      completedTodayCount = 0;
+      currentIndex = 0;
+      renderCurrentWord();
+      showToast(`已载入 ${practiceQueue.length} 个标星难词开始强化复习 ⭐`, '🎯');
+    });
+
     addNewFromCompletedBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       openAddModal();
     });
 
-    // 1. 卡片正面：单词朗读按钮（阻止翻转冒泡）
+    // 1. 卡片正面与背面星标收藏按钮（阻止翻转冒泡）
+    document.getElementById('star-card-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCurrentWordStar();
+    });
+    document.getElementById('star-card-back-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCurrentWordStar();
+    });
+
+    // 2. 卡片正面：单词朗读按钮（阻止翻转冒泡）
     pronounceBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const currentWord = practiceQueue[currentIndex]?.word;
@@ -2521,7 +2760,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       }
     });
 
-    // 2. 卡片背面：例句朗读按钮（阻止翻转冒泡）
+    // 3. 卡片背面：例句朗读按钮（阻止翻转冒泡）
     pronounceExampleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const currentExample = practiceQueue[currentIndex]?.exampleEn;
@@ -2533,8 +2772,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     // 按钮：“模糊 / 再背一次”（阻止翻转冒泡）
     btnFuzzy.addEventListener('click', async (e) => {
       e.stopPropagation();
-      window.speechSynthesis?.cancel();
-      AudioService.resetButtonState();
+      AudioService.stopAll();
 
       // 触觉轻震反馈：模糊/警告模式
       HapticService.warning();
@@ -2558,6 +2796,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       await DataService.updateWord(currentItem.id, updates);
 
       // 3. 核心闭环：将该词从当前位置移至待学队列末尾，稍后再次复习
+      const isLastRemaining = (practiceQueue.length - currentIndex) <= 1;
       const [requeuedWord] = practiceQueue.splice(currentIndex, 1);
       practiceQueue.push(requeuedWord);
 
@@ -2568,8 +2807,10 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       if (statsRes.justCheckedIn) {
         HapticService.celebrate();
         showToast(`今日复习已达 5 词，打卡成功！🔥 连续 ${statsRes.streak} 天`, '🎉');
+      } else if (isLastRemaining) {
+        showToast('已重置间隔，作为本组最后 1 个重点难词稍后强化 🔄', '💡');
       } else {
-        showToast('已重置复习间隔，放回待学末尾', '🔄');
+        showToast('已重置复习间隔，放回待学末尾 🔄', '🔄');
       }
 
       // 5. 平滑翻回正面再渲染下一个（currentIndex 自动指向原本的下一个词）
@@ -2585,8 +2826,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     // 按钮：“已掌握”（阻止翻转冒泡）
     btnMastered.addEventListener('click', async (e) => {
       e.stopPropagation();
-      window.speechSynthesis?.cancel();
-      AudioService.resetButtonState();
+      AudioService.stopAll();
 
       // 触觉反馈：掌握的清脆肯定微震
       HapticService.success();
@@ -3265,6 +3505,15 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         if (currentTab === 'practice' && !flashcard.classList.contains('hidden')) {
           e.preventDefault();
           btnMastered.click();
+        }
+        return;
+      }
+
+      // 9. 按键 S / s 或 F / f：标星收藏当前卡片单词
+      if (key === 's' || key === 'S' || key === 'f' || key === 'F') {
+        if (currentTab === 'practice' && !flashcard.classList.contains('hidden')) {
+          e.preventDefault();
+          toggleCurrentWordStar();
         }
         return;
       }
@@ -3960,6 +4209,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       const totalNew = allVocabulary.filter(i => i.status === 'new').length;
       const totalLearning = allVocabulary.filter(i => i.status === 'learning').length;
       const totalMastered = allVocabulary.filter(i => i.status === 'mastered').length;
+      const totalStarred = allVocabulary.filter(i => i.isStarred).length;
 
       countStatusAll.textContent = totalAll;
       const countStatusDue = document.getElementById('count-status-due');
@@ -3967,6 +4217,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       countStatusNew.textContent = totalNew;
       countStatusLearning.textContent = totalLearning;
       countStatusMastered.textContent = totalMastered;
+      const countStatusStarred = document.getElementById('count-status-starred');
+      if (countStatusStarred) countStatusStarred.textContent = totalStarred;
 
       // 提取所有不重复的标签
       const tagSet = new Set();
@@ -3994,7 +4246,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         );
       }
 
-      if (currentStatusFilter === 'due') {
+      if (currentStatusFilter === 'starred') {
+        filtered = filtered.filter(item => item.isStarred);
+      } else if (currentStatusFilter === 'due') {
         filtered = filtered.filter(item => !item.nextReviewDate || Number(item.nextReviewDate) <= threshold);
       } else if (currentStatusFilter !== 'all') {
         filtered = filtered.filter(item => item.status === currentStatusFilter);
@@ -4089,8 +4343,16 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
                 </div>
               </div>
 
-              <!-- 右侧快捷操作按钮（发音、编辑、删除） -->
+              <!-- 右侧快捷操作按钮（收藏、发音、编辑、删除） -->
               <div class="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                <!-- 标星收藏按钮 -->
+                <button type="button" data-action="star" data-id="${item.id}" aria-label="收藏生词" title="收藏/取消收藏" 
+                        class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${item.isStarred ? 'text-amber-500 bg-amber-500/10' : 'text-zinc-300 dark:text-zinc-600 hover:text-amber-500 hover:bg-amber-500/10'}">
+                  <svg class="w-3.5 h-3.5 pointer-events-none stroke-current stroke-[2.2] ${item.isStarred ? 'fill-amber-400' : 'fill-none'}" viewBox="0 0 24 24">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                </button>
+
                 <!-- 发音按钮 -->
                 <button type="button" data-action="speak" data-id="${item.id}" aria-label="朗读单词" 
                         class="w-7 h-7 flex items-center justify-center rounded-lg text-gold-500 hover:text-gold-600 hover:bg-gold-50 dark:hover:bg-gold-950/40 transition-colors">
@@ -4207,12 +4469,16 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         if (status === currentStatusFilter) {
           if (status === 'due') {
             btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 font-bold border border-rose-300/40 shadow-sm text-center";
+          } else if (status === 'starred') {
+            btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 font-bold border border-amber-300/40 shadow-sm text-center";
           } else {
             btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-gold-700 dark:text-gold-300 font-semibold shadow-sm text-center";
           }
         } else {
           if (status === 'due') {
             btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all text-rose-600 dark:text-rose-400 hover:text-rose-700 text-center";
+          } else if (status === 'starred') {
+            btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all text-amber-600 dark:text-amber-400 hover:text-amber-700 text-center";
           } else {
             btn.className = "status-filter-btn flex-1 py-1 px-1 rounded-lg transition-all text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 text-center";
           }
@@ -4229,8 +4495,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       renderLibraryView();
     });
 
-    // 4. 词汇列表行内事件委托（发音、编辑、删除）
-    libraryWordList.addEventListener('click', (e) => {
+    // 4. 词汇列表行内事件委托（收藏、发音、编辑、删除）
+    libraryWordList.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
 
@@ -4241,6 +4507,17 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
       if (action === 'speak') {
         AudioService.speak(item.word, btn, 0.85);
+      } else if (action === 'star') {
+        const isStarred = await DataService.toggleStar(item.id);
+        item.isStarred = isStarred;
+        const pItem = practiceQueue.find(w => w.id === item.id);
+        if (pItem) pItem.isStarred = isStarred;
+        if (practiceQueue[currentIndex]?.id === item.id) {
+          updateCardStarUI(isStarred);
+        }
+        HapticService.light();
+        showToast(isStarred ? `已将 "${item.word}" 加入标星收藏 ⭐` : `已取消 "${item.word}" 标星收藏`, '⭐');
+        renderLibraryView();
       } else if (action === 'edit') {
         openEditModal(item);
       } else if (action === 'delete') {
@@ -4392,6 +4669,34 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       if (settingsWordCount) {
         settingsWordCount.textContent = `${allVocabulary.length} 词`;
       }
+
+      // 回显最新设置项
+      const settings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : {
+        dailyNewLimit: 20,
+        studyBand: 'all',
+        accent: 'us',
+        autoPronounce: false
+      };
+
+      const dailyLimitEl = document.getElementById('settings-daily-limit');
+      if (dailyLimitEl) dailyLimitEl.value = String(settings.dailyNewLimit || 20);
+
+      const studyBandEl = document.getElementById('settings-study-band');
+      if (studyBandEl) studyBandEl.value = settings.studyBand || 'all';
+
+      const accentEl = document.getElementById('settings-accent');
+      if (accentEl) accentEl.value = settings.accent || 'us';
+
+      const autoPronounceEl = document.getElementById('settings-auto-pronounce');
+      if (autoPronounceEl) autoPronounceEl.checked = !!settings.autoPronounce;
+
+      const deviceIdEl = document.getElementById('settings-device-id');
+      if (deviceIdEl && typeof getDeviceId === 'function') {
+        const devId = getDeviceId();
+        deviceIdEl.textContent = devId;
+        deviceIdEl.title = devId;
+      }
+
       settingsModal.classList.remove('opacity-0', 'pointer-events-none');
       settingsModal.classList.add('opacity-100', 'pointer-events-auto');
       settingsModalContent?.classList.remove('scale-95');
@@ -4431,7 +4736,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
         allVocabulary = freshWords;
         tabLibraryBadge.textContent = allVocabulary.length;
-        practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+        const currentSettings = SettingsService.getSettings();
+        practiceQueue = SRSService.generateTodayTasks(allVocabulary, currentSettings.dailyNewLimit, currentSettings.studyBand);
         initialDueCount = practiceQueue.length;
         completedTodayCount = 0;
         isFreePracticeMode = false;
@@ -4465,6 +4771,82 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     settingsDoneBtn?.addEventListener('click', closeSettingsModal);
     settingsModal?.addEventListener('click', (e) => {
       if (e.target === settingsModal) closeSettingsModal();
+    });
+
+    // 每日新学单词数更改
+    document.getElementById('settings-daily-limit')?.addEventListener('change', (e) => {
+      const val = Number(e.target.value) || 20;
+      SettingsService.updateSettings({ dailyNewLimit: val });
+      const currentBand = SettingsService.getSettings().studyBand;
+      practiceQueue = SRSService.generateTodayTasks(allVocabulary, val, currentBand);
+      initialDueCount = practiceQueue.length;
+      completedTodayCount = 0;
+      currentIndex = 0;
+      isFlipped = false;
+      renderCurrentWord();
+      updateProgress();
+      showToast(`每日新学词数已设为: ${val} 词/天 🎯`, '⚙️');
+    });
+
+    // 词书分级选择更改
+    document.getElementById('settings-study-band')?.addEventListener('change', (e) => {
+      const band = e.target.value;
+      SettingsService.updateSettings({ studyBand: band });
+      const limit = SettingsService.getSettings().dailyNewLimit;
+      practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
+      initialDueCount = practiceQueue.length;
+      completedTodayCount = 0;
+      currentIndex = 0;
+      isFlipped = false;
+      renderCurrentWord();
+      updateProgress();
+      const bandText = e.target.options[e.target.selectedIndex]?.text || band;
+      showToast(`词书规划已切换为: ${bandText}`, '📚');
+    });
+
+    // 口音切换
+    document.getElementById('settings-accent')?.addEventListener('change', (e) => {
+      const accent = e.target.value;
+      SettingsService.updateSettings({ accent });
+      showToast(`已切换发音为: ${accent === 'uk' ? '英式发音 (UK)' : '美式发音 (US)'} 🔊`, '🎙️');
+    });
+
+    // 翻卡自动读音开关
+    document.getElementById('settings-auto-pronounce')?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      SettingsService.updateSettings({ autoPronounce: checked });
+      showToast(checked ? '已开启卡片自动朗读 🔊' : '已关闭自动朗读', '💡');
+    });
+
+    // 复制设备同步码
+    document.getElementById('settings-copy-device-id-btn')?.addEventListener('click', async () => {
+      const devId = typeof getDeviceId === 'function' ? getDeviceId() : 'default_device';
+      try {
+        await navigator.clipboard.writeText(devId);
+        showToast('设备同步码已复制到剪贴板 📋', '✅');
+      } catch (err) {
+        showToast(`设备代码: ${devId}`, '📋');
+      }
+    });
+
+    // 导出 Anki 卡片包 (TSV)
+    document.getElementById('settings-export-anki-btn')?.addEventListener('click', () => {
+      try {
+        const tsv = DataService.exportAnkiTsv();
+        const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bubei_anki_cards_${new Date().toISOString().slice(0, 10)}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('已导出 Anki 卡片包 (.txt)！可在 Anki 电脑/手机版一键导入', '📦');
+      } catch (err) {
+        console.error('Anki 导出失败:', err);
+        showToast('导出 Anki 卡片包失败，请重试', '❌');
+      }
     });
 
     settingsExportBtn?.addEventListener('click', () => {
@@ -5109,8 +5491,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       updateHeaderStreak();
       checkAndNotifyAchievements();
 
-      // 核心：基于艾宾浩斯/Leitner 算法自动提取今日待复习单词
-      practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+      // 核心：基于艾宾浩斯/Leitner 算法自动提取今日待复习单词（结合用户自定义每日新学上限与词书分级）
+      const userSettings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : { dailyNewLimit: 20, studyBand: 'all' };
+      practiceQueue = SRSService.generateTodayTasks(allVocabulary, userSettings.dailyNewLimit, userSettings.studyBand);
       initialDueCount = practiceQueue.length;
       completedTodayCount = 0;
       isFreePracticeMode = false;

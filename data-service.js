@@ -10,9 +10,64 @@
 
 const OLD_STORAGE_KEY = 'bubei_vocabulary_v1';
 const STORAGE_KEY = 'bubei_academic_vocab_v2';
+const DEVICE_ID_KEY = 'bubei_device_user_id';
+const SETTINGS_KEY = 'bubei_user_settings_v1';
+const VOCAB_VERSION_KEY = 'bubei_vocab_schema_v2';
 
 /**
- * ---------------- Supabase 云端同步配置与服务 ----------------
+ * 获取或初始化当前设备的唯一匿名 ID，确保云端同步不会与其他设备/用户冲突
+ */
+function getDeviceId() {
+  let id = null;
+  try {
+    id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = 'dev_' + (typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID().replace(/-/g, '').slice(0, 16) 
+        : Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+  } catch (e) {
+    id = 'dev_local_fallback';
+  }
+  return id;
+}
+
+/**
+ * ---------------- 用户学习与交互偏好设置服务 ----------------
+ */
+const DEFAULT_SETTINGS = {
+  dailyNewLimit: 20,    // 每日新词限额: 10 | 20 | 30 | 50 | 100
+  studyBand: 'all',      // 'all' | 'band4-5' | 'band6-7' | 'band8-9' | 'starred'
+  accent: 'us',          // 'us' (美音) | 'uk' (英音)
+  autoPronounce: false,  // 切词自动发音
+  hapticEnabled: true    // 触觉震动反馈
+};
+
+const SettingsService = {
+  getSettings() {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (e) {}
+    return { ...DEFAULT_SETTINGS };
+  },
+  saveSettings(updates) {
+    try {
+      const current = this.getSettings();
+      const updated = { ...current, ...updates };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+      return updated;
+    } catch (e) {
+      return DEFAULT_SETTINGS;
+    }
+  }
+};
+
+/**
+ * ---------------- Supabase 云端同步配置与服务 (支持设备级命名空间隔离) ----------------
  */
 const SUPABASE_CONFIG = {
   url: 'https://abzacuzhggyvlqwwtlyj.supabase.co',
@@ -71,14 +126,17 @@ const SupabaseService = {
   },
 
   /**
-   * 同步单个单词到云端（异步静默执行，不阻塞本地）
+   * 同步单个单词到云端（带 device_id 隔离，异步静默执行，不阻塞本地）
    */
   async syncWord(word) {
     const client = this.getClient();
     if (!client || this.connectionState === 'table_missing') return;
     try {
+      const deviceId = getDeviceId();
       const payload = {
-        id: word.id,
+        id: `${deviceId}_${word.id}`,
+        device_id: deviceId,
+        word_id: word.id,
         word: word.word,
         phonetic: word.phonetic || '',
         partOfSpeech: word.partOfSpeech || 'n.',
@@ -92,6 +150,7 @@ const SupabaseService = {
         nextReviewDate: Number(word.nextReviewDate) || Date.now(),
         lastReviewedAt: word.lastReviewedAt || null,
         userNotes: word.userNotes || '',
+        isStarred: !!word.isStarred,
         createdAt: word.createdAt || Date.now(),
         lastModifiedAt: word.lastModifiedAt || Date.now()
       };
@@ -108,21 +167,24 @@ const SupabaseService = {
     const client = this.getClient();
     if (!client || this.connectionState === 'table_missing') return;
     try {
-      await client.from('words').delete().eq('id', id);
+      const deviceId = getDeviceId();
+      await client.from('words').delete().eq('id', `${deviceId}_${id}`);
     } catch (e) {
       console.warn('[SupabaseService] 删除单词同步静默捕获:', e);
     }
   },
 
   /**
-   * 同步统计与打卡数据到云端
+   * 同步统计与打卡数据到云端 (以 deviceId 为主键隔离，杜绝覆盖他人记录)
    */
   async syncStats(stats) {
     const client = this.getClient();
     if (!client || this.connectionState === 'table_missing') return;
     try {
+      const deviceId = getDeviceId();
       const payload = {
-        id: 'global_user_stats',
+        id: `stats_${deviceId}`,
+        device_id: deviceId,
         dailyCounts: stats.dailyCounts || {},
         checkInDates: stats.checkInDates || [],
         bestStreak: Number(stats.bestStreak) || 0,
@@ -136,26 +198,29 @@ const SupabaseService = {
   },
 
   /**
-   * 分批全量推送本地数据到云端
+   * 分批全量推送本地数据到云端 (使用独立 device_id 隔离)
    * @param {(progress: { percent: number, current: number, total: number }) => void} [onProgress]
    */
   async pushAllToCloud(onProgress) {
     const client = this.getClient();
     if (!client) throw new Error('Supabase 客户端尚未初始化');
 
+    const deviceId = getDeviceId();
     const words = await DataService.getWords();
     const stats = StatsService.getStats();
 
-    // 1. 同步学习打卡记录
+    // 1. 同步当前设备的打卡记录
     await this.syncStats(stats);
 
-    // 2. 分批次同步全部词汇（每批 200 词，兼顾速度与稳定性）
+    // 2. 分批次同步当前设备词汇
     const batchSize = 200;
     const total = words.length;
 
     for (let i = 0; i < total; i += batchSize) {
       const batch = words.slice(i, i + batchSize).map(w => ({
-        id: w.id,
+        id: `${deviceId}_${w.id}`,
+        device_id: deviceId,
+        word_id: w.id,
         word: w.word,
         phonetic: w.phonetic || '',
         partOfSpeech: w.partOfSpeech || 'n.',
@@ -169,6 +234,7 @@ const SupabaseService = {
         nextReviewDate: Number(w.nextReviewDate) || Date.now(),
         lastReviewedAt: w.lastReviewedAt || null,
         userNotes: w.userNotes || '',
+        isStarred: !!w.isStarred,
         createdAt: w.createdAt || Date.now(),
         lastModifiedAt: w.lastModifiedAt || Date.now()
       }));
@@ -190,19 +256,21 @@ const SupabaseService = {
   },
 
   /**
-   * 从云端拉取全量数据并合并到本地
+   * 从云端拉取当前设备的数据并合并到本地
    */
   async pullAllFromCloud() {
     const client = this.getClient();
     if (!client) throw new Error('Supabase 客户端尚未初始化');
+
+    const deviceId = getDeviceId();
 
     // 1. 拉取打卡记录
     try {
       const { data: statsData } = await client
         .from('study_stats')
         .select('*')
-        .eq('id', 'global_user_stats')
-        .single();
+        .eq('id', `stats_${deviceId}`)
+        .maybeSingle();
 
       if (statsData) {
         const localStats = StatsService.getStats();
@@ -230,6 +298,7 @@ const SupabaseService = {
       const { data, error } = await client
         .from('words')
         .select('*')
+        .eq('device_id', deviceId)
         .range(from, from + step - 1);
 
       if (error) throw error;
@@ -245,7 +314,7 @@ const SupabaseService = {
 
     // 标准化数据格式并安全合并至本地
     const normalized = allCloudWords.map(item => ({
-      id: item.id,
+      id: item.word_id || (item.id && item.id.includes('_') ? item.id.split('_').slice(1).join('_') : item.id),
       word: item.word,
       phonetic: item.phonetic || '',
       partOfSpeech: item.partOfSpeech || item.part_of_speech || 'n.',
@@ -259,6 +328,7 @@ const SupabaseService = {
       nextReviewDate: Number(item.nextReviewDate || item.next_review_date) || Date.now(),
       lastReviewedAt: item.lastReviewedAt || item.last_reviewed_at || null,
       userNotes: item.userNotes || item.user_notes || '',
+      isStarred: !!(item.isStarred || item.is_starred),
       createdAt: item.createdAt || item.created_at || Date.now()
     }));
 
@@ -385,15 +455,22 @@ const DataService = {
   _cachedWords: null,
 
   /**
-   * 统一持久化存储：优先写入 IndexedDB，同时安全镜像写入 LocalStorage (自动捕获配额溢出)
+   * 统一持久化存储：优先写入 IndexedDB（无上限容量），LocalStorage 仅维护轻量状态标记
+   * 彻底杜绝移动端 LocalStorage 5MB 配额溢出 (QuotaExceededError) 与卡顿
    */
   async _persistWords(list) {
     this._cachedWords = list;
     await IdbStorage.saveAllWords(list);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      localStorage.setItem('bubei_vocab_meta', JSON.stringify({
+        count: list.length,
+        version: 2,
+        updatedAt: Date.now()
+      }));
+      // 清理旧版可能占用的巨型 LocalStorage 避免挤占 5MB 配额
+      localStorage.removeItem(STORAGE_KEY);
     } catch (quotaErr) {
-      console.warn('[DataService] LocalStorage 空间已满或超出 5MB 配额限制，已平滑由 IndexedDB 接管存储:', quotaErr);
+      console.warn('[DataService] LocalStorage 写入轻量元数据异常:', quotaErr);
     }
     try {
       localStorage.setItem('bubei_data_sync_trigger', Date.now().toString());
@@ -401,7 +478,7 @@ const DataService = {
   },
 
   /**
-   * 初始化存储数据（支持从旧版迁移、从 LocalStorage 自动平滑迁移至 IndexedDB）
+   * 初始化存储数据（支持从旧版迁移、增量迁移、以及 LocalStorage 自动平滑平移至 IndexedDB）
    * @returns {Promise<void>}
    */
   async init() {
@@ -409,19 +486,36 @@ const DataService = {
       // 1. 优先探测 IndexedDB
       const idbList = await IdbStorage.getAllWords();
       if (idbList && idbList.length > 0) {
+        // 增量检查是否有缺失字段 (如 isStarred 收藏状态)，自动平滑补齐
+        let needsSave = false;
+        idbList.forEach(w => {
+          if (w.isStarred === undefined) {
+            w.isStarred = false;
+            needsSave = true;
+          }
+        });
+        if (needsSave) {
+          await IdbStorage.saveAllWords(idbList);
+        }
         this._cachedWords = idbList;
+        // 清理旧版可能残留的 3.8MB LocalStorage 垃圾数据
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         return;
       }
 
-      // 2. 探测 LocalStorage
+      // 2. 探测 LocalStorage (从旧版本自动平滑无缝导入 IndexedDB)
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         try {
           const list = JSON.parse(stored);
           if (Array.isArray(list) && list.length > 0) {
+            list.forEach(w => {
+              if (w.isStarred === undefined) w.isStarred = false;
+            });
             this._cachedWords = list;
-            // 异步自动将 LocalStorage 数据迁移填充到 IndexedDB
             await IdbStorage.saveAllWords(list);
+            // 迁移完成后释放 LocalStorage
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
             return;
           }
         } catch (e) {
@@ -449,7 +543,8 @@ const DataService = {
                     interval: w.interval || 0,
                     nextReviewDate: w.nextReviewDate,
                     reviewCount: w.reviewCount || 0,
-                    lastReviewedAt: w.lastReviewedAt || null
+                    lastReviewedAt: w.lastReviewedAt || null,
+                    isStarred: !!w.isStarred
                   });
                 }
                 if (w.id && String(w.id).startsWith('word_custom_')) {
@@ -475,7 +570,8 @@ const DataService = {
           nextReviewDate: customState ? customState.nextReviewDate : (w.nextReviewDate || now),
           reviewCount: customState ? customState.reviewCount : (w.reviewCount || 0),
           lastReviewedAt: customState ? customState.lastReviewedAt : (w.lastReviewedAt || null),
-          userNotes: userNote
+          userNotes: userNote,
+          isStarred: customState ? !!customState.isStarred : false
         };
       }) : [];
 
@@ -487,6 +583,42 @@ const DataService = {
     } catch (err) {
       console.warn('[DataService] 本地存储初始化警告:', err);
     }
+  },
+
+  /**
+   * 切换单词星标收藏状态
+   * @param {string} id 单词唯一标识
+   * @returns {Promise<boolean>} 当前是否已收藏
+   */
+  async toggleStar(id) {
+    const list = await this.getWords();
+    const item = list.find(w => w.id === id);
+    if (!item) return false;
+    item.isStarred = !item.isStarred;
+    item.lastModifiedAt = Date.now();
+    await this._persistWords(list);
+    SupabaseService.syncWord(item).catch(() => {});
+    return item.isStarred;
+  },
+
+  /**
+   * 导出为 Anki / 制表符分隔的 TSV 文本格式
+   * 包含：单词、音标、词性、释义、英文例句、中文例句、标签、笔记
+   */
+  async exportAnkiTsv() {
+    const list = await this.getWords();
+    const headers = ['Word', 'Phonetic', 'PartOfSpeech', 'Definition', 'ExampleEn', 'ExampleCn', 'Tags', 'Notes'];
+    const rows = list.map(w => [
+      (w.word || '').replace(/[\r\n\t]/g, ' '),
+      (w.phonetic || '').replace(/[\r\n\t]/g, ' '),
+      (w.partOfSpeech || '').replace(/[\r\n\t]/g, ' '),
+      (w.definition || '').replace(/[\r\n\t]/g, ' '),
+      (w.exampleEn || '').replace(/[\r\n\t]/g, ' '),
+      (w.exampleCn || '').replace(/[\r\n\t]/g, ' '),
+      (w.tags || []).join('; '),
+      (w.userNotes || '').replace(/[\r\n\t]/g, ' ')
+    ].join('\t'));
+    return [headers.join('\t'), ...rows].join('\n');
   },
 
   /**
@@ -572,6 +704,7 @@ const DataService = {
       status: word.status || 'new',
       reviewCount: Number(word.reviewCount) || 0,
       userNotes: (word.userNotes || '').trim(),
+      isStarred: !!word.isStarred,
       interval: Number(word.interval) || 0,
       nextReviewDate: Number(word.nextReviewDate) || now,
       lastReviewedAt: word.lastReviewedAt || null,
@@ -723,6 +856,7 @@ const DataService = {
         nextReviewDate: Number(item.nextReviewDate) || Date.now(),
         lastReviewedAt: item.lastReviewedAt ? Number(item.lastReviewedAt) : null,
         userNotes: String(item.userNotes || '').trim(),
+        isStarred: !!(item.isStarred || item.is_starred),
         createdAt: Number(item.createdAt) || Date.now(),
         lastModifiedAt: Date.now()
       });
@@ -762,6 +896,7 @@ const DataService = {
             nextReviewDate: item.nextReviewDate || existing.nextReviewDate || Date.now(),
             lastReviewedAt: item.lastReviewedAt || existing.lastReviewedAt || null,
             userNotes: item.userNotes || existing.userNotes || '',
+            isStarred: (item.isStarred !== undefined ? !!item.isStarred : !!existing.isStarred),
             lastModifiedAt: Date.now()
           });
           updatedCount++;
@@ -933,13 +1068,14 @@ const SRSService = {
   },
 
   /**
-   * 每日任务生成：优先提取已学且到期的复习单词，未学新词每日限量引入（默认 20 词）
-   * 增加本地时钟篡改/未来超大时间戳防冻结保护
+   * 每日任务生成：优先提取已学且到期的复习单词，未学新词每日限量引入
+   * 支持按 Band 分级筛选 (band4-5, band6-7, band8-9) 或仅背星标生词 (starred)
    * @param {Array} words 全量单词列表
    * @param {number} [newLimit=20] 每日新词限额
+   * @param {string} [levelFilter='all'] 分级筛选
    * @returns {Array} 今日待复习与学习单词列表
    */
-  generateTodayTasks(words, newLimit = 20) {
+  generateTodayTasks(words, newLimit = 20, levelFilter = 'all') {
     if (!Array.isArray(words) || words.length === 0) return [];
 
     const now = Date.now();
@@ -947,12 +1083,28 @@ const SRSService = {
     endOfToday.setHours(23, 59, 59, 999);
     const threshold = endOfToday.getTime();
 
+    // 根据选定分级筛选候选词池
+    let pool = words;
+    if (levelFilter === 'band4-5') {
+      pool = words.filter(w => (w.tags || []).some(t => /band\s*[45]/i.test(t)));
+    } else if (levelFilter === 'band6-7') {
+      pool = words.filter(w => (w.tags || []).some(t => /band\s*[67]/i.test(t)));
+    } else if (levelFilter === 'band8-9') {
+      pool = words.filter(w => (w.tags || []).some(t => /band\s*[89]/i.test(t)));
+    } else if (levelFilter === 'starred') {
+      pool = words.filter(w => !!w.isStarred);
+    }
+
+    if (pool.length === 0) {
+      pool = words; // 若该分类暂无词汇则回退至全量
+    }
+
     // 1. 已学过且当前已到期的复习词汇
     const dueWords = [];
     // 2. 从未背过的新词
     const newWords = [];
 
-    for (const w of words) {
+    for (const w of pool) {
       // 本地时钟篡改保护：若未来时间戳异常超过 365 天，自动修正归位为今日到期
       let nextReviewDate = Number(w.nextReviewDate) || 0;
       if (nextReviewDate > now + (365 * 24 * 60 * 60 * 1000)) {
@@ -974,7 +1126,8 @@ const SRSService = {
     dueWords.sort((a, b) => (a.nextReviewDate || 0) - (b.nextReviewDate || 0));
 
     // 每日新词配额裁剪
-    const todayNewQuota = newWords.slice(0, newLimit);
+    const safeLimit = Math.max(1, Number(newLimit) || 20);
+    const todayNewQuota = newWords.slice(0, safeLimit);
 
     return [...dueWords, ...todayNewQuota];
   },
@@ -1395,7 +1548,7 @@ const AchievementService = {
   },
 
   /**
-   * 获取所有 6 个预设成就及其在当前上下文下的达成状态与进度
+   * 获取所有预设成就（共 8 个）及其在当前上下文下的达成状态与进度
    */
   getAchievements(context = {}) {
     const data = this.getData();
@@ -1469,7 +1622,9 @@ if (typeof window !== 'undefined') {
   window.AchievementService = AchievementService;
   window.SupabaseService = SupabaseService;
   window.SUPABASE_CONFIG = SUPABASE_CONFIG;
+  window.SettingsService = SettingsService;
+  window.getDeviceId = getDeviceId;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG };
+  module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG, SettingsService, getDeviceId };
 }
