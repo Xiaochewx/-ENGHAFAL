@@ -7,9 +7,9 @@
  * 3. 导航离线兜底：断网时刷新或进入页面依然秒级加载已缓存的 index.html
  */
 
-const CACHE_NAME = 'bubei-vocab-pwa-v7';
+const CACHE_NAME = 'bubei-vocab-pwa-v8';
 
-// 核心预缓存资源列表
+// 核心预缓存资源列表（仅包含同源高稳定静态资源，避免跨域 CDN 在 install 阶段因 CORS 报错）
 const PRECACHE_ASSETS = [
   './',
   './index.html',
@@ -18,16 +18,20 @@ const PRECACHE_ASSETS = [
   './words.js',
   './icon.svg',
   './icon-192.png',
-  './icon-512.png',
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+  './icon-512.png'
 ];
+
+// 监听客户端 skipWaiting 消息，支持无缝版本热更新
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
 
 // 1. Install 阶段：预缓存核心静态资源并跳过等待
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // 容错预缓存机制：即便某个资源暂不可达，也不影响整体 SW 安装成功
       for (const asset of PRECACHE_ASSETS) {
         try {
           await cache.add(asset);
@@ -94,7 +98,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
+          if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           }

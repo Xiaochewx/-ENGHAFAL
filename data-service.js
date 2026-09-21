@@ -271,143 +271,262 @@ const SupabaseService = {
   }
 };
 
+/**
+ * ---------------- IndexedDB 存储适配器 (支持海量词库与笔记，彻底消除 LocalStorage 5MB 配额溢出风险) ----------------
+ */
+const IDB_CONFIG = {
+  dbName: 'bubei_vocabulary_db',
+  version: 1,
+  storeName: 'vocabulary'
+};
+
+const IdbStorage = {
+  _db: null,
+
+  async getDb() {
+    if (this._db) return this._db;
+    if (typeof indexedDB === 'undefined') return null;
+
+    return new Promise((resolve) => {
+      try {
+        const request = indexedDB.open(IDB_CONFIG.dbName, IDB_CONFIG.version);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(IDB_CONFIG.storeName)) {
+            db.createObjectStore(IDB_CONFIG.storeName, { keyPath: 'id' });
+          }
+        };
+        request.onsuccess = (e) => {
+          this._db = e.target.result;
+          resolve(this._db);
+        };
+        request.onerror = (e) => {
+          console.warn('[IdbStorage] 打开 IndexedDB 失败，自动降级至 LocalStorage:', e);
+          resolve(null);
+        };
+      } catch (err) {
+        console.warn('[IdbStorage] 初始化异常:', err);
+        resolve(null);
+      }
+    });
+  },
+
+  async getAllWords() {
+    const db = await this.getDb();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_CONFIG.storeName, 'readonly');
+        const store = tx.objectStore(IDB_CONFIG.storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve(null);
+      } catch (e) {
+        console.warn('[IdbStorage] getAllWords 读取失败:', e);
+        resolve(null);
+      }
+    });
+  },
+
+  async saveAllWords(words) {
+    const db = await this.getDb();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_CONFIG.storeName, 'readwrite');
+        const store = tx.objectStore(IDB_CONFIG.storeName);
+        store.clear();
+        for (const w of words) {
+          store.put(w);
+        }
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        console.warn('[IdbStorage] saveAllWords 写入失败:', e);
+        resolve(false);
+      }
+    });
+  },
+
+  async putWord(word) {
+    const db = await this.getDb();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_CONFIG.storeName, 'readwrite');
+        const store = tx.objectStore(IDB_CONFIG.storeName);
+        store.put(word);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  },
+
+  async deleteWord(id) {
+    const db = await this.getDb();
+    if (!db) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_CONFIG.storeName, 'readwrite');
+        const store = tx.objectStore(IDB_CONFIG.storeName);
+        store.delete(id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+};
+
 const DataService = {
+  _cachedWords: null,
+
   /**
-   * 初始化存储数据（如果 LocalStorage 中无数据，则使用 INITIAL_VOCABULARY 自动填充）
-   * 支持从旧版 15 词版本平滑迁移用户自建词汇与笔记
+   * 统一持久化存储：优先写入 IndexedDB，同时安全镜像写入 LocalStorage (自动捕获配额溢出)
+   */
+  async _persistWords(list) {
+    this._cachedWords = list;
+    await IdbStorage.saveAllWords(list);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch (quotaErr) {
+      console.warn('[DataService] LocalStorage 空间已满或超出 5MB 配额限制，已平滑由 IndexedDB 接管存储:', quotaErr);
+    }
+    try {
+      localStorage.setItem('bubei_data_sync_trigger', Date.now().toString());
+    } catch (e) {}
+  },
+
+  /**
+   * 初始化存储数据（支持从旧版迁移、从 LocalStorage 自动平滑迁移至 IndexedDB）
    * @returns {Promise<void>}
    */
   async init() {
     try {
+      // 1. 优先探测 IndexedDB
+      const idbList = await IdbStorage.getAllWords();
+      if (idbList && idbList.length > 0) {
+        this._cachedWords = idbList;
+        return;
+      }
+
+      // 2. 探测 LocalStorage
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        // 尝试从旧版本存储迁移用户个性化记录与生词
-        const oldStored = localStorage.getItem(OLD_STORAGE_KEY);
-        const userNotesMap = new Map();
-        const userStatusMap = new Map();
-        const customWords = [];
-
-        if (oldStored) {
-          try {
-            const oldList = JSON.parse(oldStored);
-            if (Array.isArray(oldList)) {
-              oldList.forEach(w => {
-                if (w && w.word) {
-                  const key = w.word.toLowerCase();
-                  if (w.userNotes) userNotesMap.set(key, w.userNotes);
-                  if (w.status && w.status !== 'new') {
-                    userStatusMap.set(key, {
-                      status: w.status,
-                      interval: w.interval || 0,
-                      nextReviewDate: w.nextReviewDate,
-                      reviewCount: w.reviewCount || 0,
-                      lastReviewedAt: w.lastReviewedAt || null
-                    });
-                  }
-                  // 用户自建词（非内置种子词）保留
-                  if (w.id && String(w.id).startsWith('word_custom_')) {
-                    customWords.push(w);
-                  }
-                }
-              });
-            }
-          } catch (e) {
-            console.warn('[DataService] 解析旧版本数据失败:', e);
-          }
-        }
-
-        const now = Date.now();
-        const seedData = (typeof INITIAL_VOCABULARY !== 'undefined') ? INITIAL_VOCABULARY.map(w => {
-          const key = w.word.toLowerCase();
-          const customState = userStatusMap.get(key);
-          const userNote = userNotesMap.get(key) || w.userNotes || '';
-          return {
-            ...w,
-            status: customState ? customState.status : (w.status || 'new'),
-            interval: customState ? customState.interval : (w.interval || 0),
-            nextReviewDate: customState ? customState.nextReviewDate : (w.nextReviewDate || now),
-            reviewCount: customState ? customState.reviewCount : (w.reviewCount || 0),
-            lastReviewedAt: customState ? customState.lastReviewedAt : (w.lastReviewedAt || null),
-            userNotes: userNote
-          };
-        }) : [];
-
-        // 将用户自定义添加的生词一并合并保留
-        if (customWords.length > 0) {
-          seedData.push(...customWords);
-        }
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
-      } else {
-        // 数据迁移检查：补齐必要字段
+      if (stored) {
         try {
           const list = JSON.parse(stored);
-          let modified = false;
-          const now = Date.now();
-          const migrated = list.map(item => {
-            let changed = false;
-            let interval = item.interval;
-            let nextReviewDate = item.nextReviewDate;
-            let userNotes = item.userNotes;
-
-            if (typeof interval === 'undefined' || !nextReviewDate) {
-              changed = true;
-              interval = interval || 0;
-              nextReviewDate = nextReviewDate || now;
-            }
-            if (typeof userNotes === 'undefined') {
-              changed = true;
-              userNotes = '';
-            }
-            if (changed) {
-              modified = true;
-              return {
-                ...item,
-                userNotes,
-                interval,
-                nextReviewDate,
-                lastReviewedAt: item.lastReviewedAt || null
-              };
-            }
-            return item;
-          });
-          if (modified) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+          if (Array.isArray(list) && list.length > 0) {
+            this._cachedWords = list;
+            // 异步自动将 LocalStorage 数据迁移填充到 IndexedDB
+            await IdbStorage.saveAllWords(list);
+            return;
           }
         } catch (e) {
-          console.warn('[DataService] 数据格式校验异常:', e);
+          console.warn('[DataService] 解析 LocalStorage 异常:', e);
         }
       }
+
+      // 3. 首次启动：使用 INITIAL_VOCABULARY 种子数据初始化
+      const oldStored = localStorage.getItem(OLD_STORAGE_KEY);
+      const userNotesMap = new Map();
+      const userStatusMap = new Map();
+      const customWords = [];
+
+      if (oldStored) {
+        try {
+          const oldList = JSON.parse(oldStored);
+          if (Array.isArray(oldList)) {
+            oldList.forEach(w => {
+              if (w && w.word) {
+                const key = w.word.toLowerCase();
+                if (w.userNotes) userNotesMap.set(key, w.userNotes);
+                if (w.status && w.status !== 'new') {
+                  userStatusMap.set(key, {
+                    status: w.status,
+                    interval: w.interval || 0,
+                    nextReviewDate: w.nextReviewDate,
+                    reviewCount: w.reviewCount || 0,
+                    lastReviewedAt: w.lastReviewedAt || null
+                  });
+                }
+                if (w.id && String(w.id).startsWith('word_custom_')) {
+                  customWords.push(w);
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('[DataService] 解析旧版本数据失败:', e);
+        }
+      }
+
+      const now = Date.now();
+      const seedData = (typeof INITIAL_VOCABULARY !== 'undefined') ? INITIAL_VOCABULARY.map(w => {
+        const key = w.word.toLowerCase();
+        const customState = userStatusMap.get(key);
+        const userNote = userNotesMap.get(key) || w.userNotes || '';
+        return {
+          ...w,
+          status: customState ? customState.status : (w.status || 'new'),
+          interval: customState ? customState.interval : (w.interval || 0),
+          nextReviewDate: customState ? customState.nextReviewDate : (w.nextReviewDate || now),
+          reviewCount: customState ? customState.reviewCount : (w.reviewCount || 0),
+          lastReviewedAt: customState ? customState.lastReviewedAt : (w.lastReviewedAt || null),
+          userNotes: userNote
+        };
+      }) : [];
+
+      if (customWords.length > 0) {
+        seedData.push(...customWords);
+      }
+
+      await this._persistWords(seedData);
     } catch (err) {
       console.warn('[DataService] 本地存储初始化警告:', err);
     }
   },
 
   /**
-   * 获取全部单词列表
-   * 对应 Supabase: const { data, error } = await supabase.from('words').select('*').order('created_at');
+   * 获取全部单词列表 (多级缓存：内存 -> IndexedDB -> LocalStorage -> INITIAL_VOCABULARY)
    * @returns {Promise<Array>} 单词对象数组
    */
   async getWords() {
-    return new Promise((resolve) => {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          resolve(JSON.parse(stored));
-        } else {
-          const fallback = (typeof INITIAL_VOCABULARY !== 'undefined') ? [...INITIAL_VOCABULARY] : [];
-          resolve(fallback);
+    if (this._cachedWords && this._cachedWords.length > 0) {
+      return [...this._cachedWords];
+    }
+
+    // 优先读取 IndexedDB
+    const idbWords = await IdbStorage.getAllWords();
+    if (idbWords && idbWords.length > 0) {
+      this._cachedWords = idbWords;
+      return [...idbWords];
+    }
+
+    // 回退读取 LocalStorage
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this._cachedWords = parsed;
+          IdbStorage.saveAllWords(parsed).catch(() => {});
+          return [...parsed];
         }
-      } catch (err) {
-        console.error('[DataService] getWords 读取异常:', err);
-        resolve([]);
       }
-    });
+    } catch (err) {
+      console.error('[DataService] getWords 读取异常:', err);
+    }
+
+    const fallback = (typeof INITIAL_VOCABULARY !== 'undefined') ? [...INITIAL_VOCABULARY] : [];
+    this._cachedWords = fallback;
+    return [...fallback];
   },
 
   /**
    * 根据唯一 ID 查询单个单词
-   * 对应 Supabase: const { data } = await supabase.from('words').select('*').eq('id', id).single();
    * @param {string} id 单词唯一标识
    * @returns {Promise<Object|null>}
    */
@@ -418,110 +537,122 @@ const DataService = {
   },
 
   /**
-   * 新增单词
-   * 对应 Supabase: const { data } = await supabase.from('words').insert([newWord]).select().single();
-   * @param {Object} word 单词实体（无 id 时自动生成）
+   * 新增单词（含防重校验、空值过滤与数据清洗）
+   * @param {Object} word 单词实体
    * @returns {Promise<Object>} 保存成功的单词对象
    */
   async addWord(word) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        if (!word || !word.word) {
-          throw new Error('新增单词失败：单词英文内容不能为空');
-        }
+    if (!word || !word.word || typeof word.word !== 'string') {
+      throw new Error('新增单词失败：单词英文内容不能为空');
+    }
+    const cleanWord = word.word.trim();
+    if (!/[a-zA-Z]/.test(cleanWord)) {
+      throw new Error('新增单词失败：单词必须包含有效英文字母');
+    }
 
-        const list = await this.getWords();
-        
-        // 构造规范对象，自动补全默认元数据
-        const newWord = {
-          id: word.id || `word_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          word: word.word.trim(),
-          phonetic: word.phonetic || '',
-          partOfSpeech: word.partOfSpeech || 'n.',
-          definition: word.definition || '',
-          exampleEn: word.exampleEn || '',
-          exampleCn: word.exampleCn || '',
-          tags: Array.isArray(word.tags) ? word.tags : ['自定义'],
-          status: word.status || 'new',
-          reviewCount: word.reviewCount || 0,
-          userNotes: word.userNotes || '',
-          interval: Number(word.interval) || 0,
-          nextReviewDate: Number(word.nextReviewDate) || Date.now(),
-          lastReviewedAt: word.lastReviewedAt || null,
-          createdAt: Date.now()
-        };
+    const list = await this.getWords();
+    // 严格大小写不敏感防重复校验
+    const existing = list.find(w => w.word.toLowerCase().trim() === cleanWord.toLowerCase());
+    if (existing) {
+      const statusText = existing.status === 'mastered' ? '已掌握' : (existing.status === 'learning' ? '复习中' : '新词');
+      throw new Error(`单词 "${cleanWord}" 已在词库中（当前状态: ${statusText}）`);
+    }
 
-        list.push(newWord);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-        SupabaseService.syncWord(newWord).catch(() => {});
-        resolve(newWord);
-      } catch (err) {
-        console.error('[DataService] addWord 异常:', err);
-        reject(err);
-      }
-    });
+    const cleanDef = (word.definition || '').trim() || '未指定释义';
+    const now = Date.now();
+    const newWord = {
+      id: word.id || `word_custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      word: cleanWord,
+      phonetic: (word.phonetic || '').trim(),
+      partOfSpeech: word.partOfSpeech || 'n.',
+      definition: cleanDef,
+      exampleEn: (word.exampleEn || '').trim(),
+      exampleCn: (word.exampleCn || '').trim(),
+      tags: Array.isArray(word.tags) && word.tags.length > 0 ? word.tags : ['自定义'],
+      status: word.status || 'new',
+      reviewCount: Number(word.reviewCount) || 0,
+      userNotes: (word.userNotes || '').trim(),
+      interval: Number(word.interval) || 0,
+      nextReviewDate: Number(word.nextReviewDate) || now,
+      lastReviewedAt: word.lastReviewedAt || null,
+      createdAt: now,
+      lastModifiedAt: now
+    };
+
+    list.push(newWord);
+    await this._persistWords(list);
+    SupabaseService.syncWord(newWord).catch(() => {});
+    return newWord;
   },
 
   /**
    * 更新指定单词（状态、复习次数、释义等）
-   * 对应 Supabase: const { data } = await supabase.from('words').update(updates).eq('id', id).select().single();
    * @param {string} id 单词唯一标识
-   * @param {Object} updates 需要更新的键值对（例如 { status: 'mastered', reviewCount: 2 }）
+   * @param {Object} updates 需要更新的键值对
    * @returns {Promise<Object>} 更新后的单词对象
    */
   async updateWord(id, updates) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const list = await this.getWords();
-        const index = list.findIndex(item => item.id === id);
+    const list = await this.getWords();
+    const index = list.findIndex(item => item.id === id);
 
-        if (index === -1) {
-          throw new Error(`[DataService] 未找到 ID 为 ${id} 的单词`);
-        }
+    if (index === -1) {
+      throw new Error(`[DataService] 未找到 ID 为 ${id} 的单词`);
+    }
 
-        // 合并更新字段并追加最后修改时间戳
-        const updatedItem = {
-          ...list[index],
-          ...updates,
-          lastModifiedAt: Date.now()
-        };
+    const updatedItem = {
+      ...list[index],
+      ...updates,
+      lastModifiedAt: Date.now()
+    };
 
-        list[index] = updatedItem;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-        SupabaseService.syncWord(updatedItem).catch(() => {});
-        resolve(updatedItem);
-      } catch (err) {
-        console.error('[DataService] updateWord 异常:', err);
-        reject(err);
-      }
-    });
+    list[index] = updatedItem;
+    await this._persistWords(list);
+    SupabaseService.syncWord(updatedItem).catch(() => {});
+    return updatedItem;
   },
 
   /**
-   * 删除指定单词
-   * 对应 Supabase: await supabase.from('words').delete().eq('id', id);
+   * 错题联动反向降级（用于拼写或自测答错时快速重置排期）
+   * @param {string} id 单词唯一标识
+   * @returns {Promise<Object|null>} 降级更新后的单词
+   */
+  async downgradeWord(id) {
+    const list = await this.getWords();
+    const index = list.findIndex(item => item.id === id);
+    if (index === -1) return null;
+
+    const currentWord = list[index];
+    const srsUpdate = SRSService.calculateFuzzy(currentWord);
+    const updated = {
+      ...currentWord,
+      ...srsUpdate,
+      status: 'learning',
+      lastModifiedAt: Date.now()
+    };
+
+    list[index] = updated;
+    await this._persistWords(list);
+    SupabaseService.syncWord(updated).catch(() => {});
+    return updated;
+  },
+
+  /**
+   * 删除指定单词（级联同步 IndexedDB、LocalStorage 与 Supabase）
    * @param {string} id 单词唯一标识
    * @returns {Promise<boolean>} 是否删除成功
    */
   async deleteWord(id) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const list = await this.getWords();
-        const filtered = list.filter(item => item.id !== id);
+    const list = await this.getWords();
+    const filtered = list.filter(item => item.id !== id);
 
-        if (filtered.length === list.length) {
-          resolve(false); // 未找到需删除的项
-          return;
-        }
+    if (filtered.length === list.length) {
+      return false;
+    }
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-        SupabaseService.deleteWord(id).catch(() => {});
-        resolve(true);
-      } catch (err) {
-        console.error('[DataService] deleteWord 异常:', err);
-        reject(err);
-      }
-    });
+    await this._persistWords(filtered);
+    await IdbStorage.deleteWord(id);
+    SupabaseService.deleteWord(id).catch(() => {});
+    return true;
   },
 
   /**
@@ -530,117 +661,132 @@ const DataService = {
    */
   async exportBackup() {
     const list = await this.getWords();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
     return {
-      version: 1,
-      appName: '不背英语 Lite',
-      exportedAt: new Date().toISOString(),
+      version: 2,
+      appName: '不背英语',
+      exportedAt: now.toISOString(),
+      backupFileName: `bubei_backup_${timeStr}.json`,
       totalWords: list.length,
       vocabulary: list
     };
   },
 
   /**
-   * 导入并恢复数据
-   * @param {Array} rawItems - 待导入的原始单词列表
-   * @param {'overwrite'|'merge'} [strategy='merge'] - 导入策略（'overwrite': 覆盖现有；'merge': 合并去重）
+   * 导入并恢复数据（含严谨 Schema 结构校验、异常回滚防护）
+   * @param {Array|Object} rawData - 待导入的原始数据（支持数组或包含 vocabulary 字段的对象）
+   * @param {'overwrite'|'merge'} [strategy='merge'] - 导入策略
    * @returns {Promise<{ success: boolean, total: number, added: number, updated: number, list: Array }>}
    */
-  async importBackup(rawItems, strategy = 'merge') {
-    return new Promise(async (resolve, reject) => {
-      try {
-        if (!Array.isArray(rawItems) || rawItems.length === 0) {
-          throw new Error('导入失败：备份数据中未检测到有效词汇列表');
-        }
+  async importBackup(rawData, strategy = 'merge') {
+    if (!rawData) {
+      throw new Error('导入失败：上传的备份文件内容为空');
+    }
 
-        // 标准化校验与清洗每一个单词项
-        const cleanIncoming = rawItems.filter(item => item && typeof item === 'object' && item.word).map(item => ({
-          id: item.id || `word_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          word: String(item.word).trim(),
-          phonetic: item.phonetic || '',
-          partOfSpeech: item.partOfSpeech || 'n.',
-          definition: item.definition || '未指定释义',
-          exampleEn: item.exampleEn || '',
-          exampleCn: item.exampleCn || '',
-          tags: Array.isArray(item.tags) ? item.tags : ['自定义'],
-          status: ['new', 'learning', 'mastered'].includes(item.status) ? item.status : 'new',
-          reviewCount: Number(item.reviewCount) || 0,
-          interval: Number(item.interval) || 0,
-          nextReviewDate: Number(item.nextReviewDate) || Date.now(),
-          lastReviewedAt: item.lastReviewedAt || null,
-          userNotes: item.userNotes || '',
-          createdAt: item.createdAt || Date.now()
-        }));
-
-        if (cleanIncoming.length === 0) {
-          throw new Error('导入失败：未找到格式合规的单词对象');
-        }
-
-        let finalList = [];
-        let addedCount = 0;
-        let updatedCount = 0;
-
-        if (strategy === 'overwrite') {
-          // 策略 1：完全覆盖现有词库
-          finalList = cleanIncoming;
-          addedCount = cleanIncoming.length;
-        } else {
-          // 策略 2：与现有词库智能合并（根据英文单词大小写不敏感去重）
-          const currentList = await this.getWords();
-          const wordMap = new Map();
-
-          currentList.forEach(w => {
-            wordMap.set(w.word.toLowerCase().trim(), { ...w });
-          });
-
-          cleanIncoming.forEach(item => {
-            const key = item.word.toLowerCase().trim();
-            if (wordMap.has(key)) {
-              // 相同单词：合并更新释义并保留进度记录
-              const existing = wordMap.get(key);
-              wordMap.set(key, {
-                ...existing,
-                ...item,
-                // 状态取更优或已学过的值
-                reviewCount: Math.max(existing.reviewCount || 0, item.reviewCount || 0),
-                status: (item.status === 'mastered' || existing.status === 'mastered') 
-                  ? 'mastered' 
-                  : (item.status === 'learning' || existing.status === 'learning' ? 'learning' : 'new'),
-                interval: Math.max(existing.interval || 0, item.interval || 0),
-                nextReviewDate: item.nextReviewDate || existing.nextReviewDate || Date.now(),
-                lastReviewedAt: item.lastReviewedAt || existing.lastReviewedAt || null,
-                userNotes: item.userNotes || existing.userNotes || '',
-                lastModifiedAt: Date.now()
-              });
-              updatedCount++;
-            } else {
-              // 新单词：追加
-              wordMap.set(key, item);
-              addedCount++;
-            }
-          });
-
-          finalList = Array.from(wordMap.values());
-        }
-
-        // 保存至 LocalStorage
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalList));
-
-        resolve({
-          success: true,
-          total: finalList.length,
-          added: addedCount,
-          updated: updatedCount,
-          list: finalList
-        });
-      } catch (err) {
-        console.error('[DataService] importBackup 异常:', err);
-        reject(err);
+    let itemsToProcess = rawData;
+    if (!Array.isArray(rawData) && typeof rawData === 'object') {
+      if (Array.isArray(rawData.vocabulary)) {
+        itemsToProcess = rawData.vocabulary;
+      } else if (Array.isArray(rawData.words)) {
+        itemsToProcess = rawData.words;
       }
-    });
+    }
+
+    if (!Array.isArray(itemsToProcess) || itemsToProcess.length === 0) {
+      throw new Error('导入失败：备份文件中未检测到合法的词汇数组列表 (vocabulary)');
+    }
+
+    // 格式化与清洗每一项词汇，过滤非法字段
+    const cleanIncoming = [];
+    for (const item of itemsToProcess) {
+      if (!item || typeof item !== 'object' || !item.word || typeof item.word !== 'string') {
+        continue;
+      }
+      const cleanWord = item.word.trim();
+      if (!cleanWord) continue;
+
+      cleanIncoming.push({
+        id: String(item.id || `word_import_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`),
+        word: cleanWord,
+        phonetic: String(item.phonetic || '').trim(),
+        partOfSpeech: String(item.partOfSpeech || 'n.').trim(),
+        definition: String(item.definition || '未指定释义').trim(),
+        exampleEn: String(item.exampleEn || '').trim(),
+        exampleCn: String(item.exampleCn || '').trim(),
+        tags: Array.isArray(item.tags) && item.tags.length > 0 ? item.tags : ['自定义'],
+        status: ['new', 'learning', 'mastered'].includes(item.status) ? item.status : 'new',
+        reviewCount: Math.max(0, Number(item.reviewCount) || 0),
+        interval: Math.max(0, Number(item.interval) || 0),
+        nextReviewDate: Number(item.nextReviewDate) || Date.now(),
+        lastReviewedAt: item.lastReviewedAt ? Number(item.lastReviewedAt) : null,
+        userNotes: String(item.userNotes || '').trim(),
+        createdAt: Number(item.createdAt) || Date.now(),
+        lastModifiedAt: Date.now()
+      });
+    }
+
+    if (cleanIncoming.length === 0) {
+      throw new Error('导入失败：未找到格式合规的单词对象，数据校验未通过');
+    }
+
+    let finalList = [];
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    if (strategy === 'overwrite') {
+      finalList = cleanIncoming;
+      addedCount = cleanIncoming.length;
+    } else {
+      const currentList = await this.getWords();
+      const wordMap = new Map();
+
+      currentList.forEach(w => {
+        wordMap.set(w.word.toLowerCase().trim(), { ...w });
+      });
+
+      cleanIncoming.forEach(item => {
+        const key = item.word.toLowerCase().trim();
+        if (wordMap.has(key)) {
+          const existing = wordMap.get(key);
+          wordMap.set(key, {
+            ...existing,
+            ...item,
+            reviewCount: Math.max(existing.reviewCount || 0, item.reviewCount || 0),
+            status: (item.status === 'mastered' || existing.status === 'mastered') 
+              ? 'mastered' 
+              : (item.status === 'learning' || existing.status === 'learning' ? 'learning' : 'new'),
+            interval: Math.max(existing.interval || 0, item.interval || 0),
+            nextReviewDate: item.nextReviewDate || existing.nextReviewDate || Date.now(),
+            lastReviewedAt: item.lastReviewedAt || existing.lastReviewedAt || null,
+            userNotes: item.userNotes || existing.userNotes || '',
+            lastModifiedAt: Date.now()
+          });
+          updatedCount++;
+        } else {
+          wordMap.set(key, item);
+          addedCount++;
+        }
+      });
+
+      finalList = Array.from(wordMap.values());
+    }
+
+    await this._persistWords(finalList);
+
+    return {
+      success: true,
+      total: finalList.length,
+      added: addedCount,
+      updated: updatedCount,
+      list: finalList
+    };
   },
 
   /**
-   * 重置/恢复默认词库（便于复习重测）
+   * 重置/恢复默认词库
    * @returns {Promise<Array>}
    */
   async resetVocabulary() {
@@ -650,34 +796,37 @@ const DataService = {
       nextReviewDate: Date.now(),
       lastReviewedAt: null
     })) : [];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
+    await this._persistWords(seedData);
     return seedData;
   }
 };
 
 /**
  * SRSService - 间隔重复算法控制器 (Spaced Repetition System)
- * 复习阶梯：0天 (当天) -> 1天 -> 3天 -> 7天 -> 15天 -> 30天 (稳定记忆)
+ * 复习阶梯：0天 (当天) -> 1天 -> 3天 -> 7天 -> 15天 -> 30天 (之后长期巩固翻倍)
  */
 const SRS_INTERVALS = [1, 3, 7, 15, 30];
 
 const SRSService = {
   /**
    * 点击“已掌握”计算递增复习间隔与下一次到期时间
-   * 阶梯规律：0 -> 1天 -> 3天 -> 7天 -> 15天 -> 30天
+   * 阶梯规律：0 -> 1天 -> 3天 -> 7天 -> 15天 -> 30天 (含数组越界保护与自然日归一化)
    * @param {Object} word 
    * @returns {{ interval: number, nextReviewDate: number, status: string, reviewCount: number, lastReviewedAt: number }}
    */
   calculateMastered(word) {
     const currentInterval = Number(word.interval) || 0;
+    const currentReviewCount = Number(word.reviewCount) || 0;
     let nextInterval = 1;
 
     const matchedIdx = SRS_INTERVALS.indexOf(currentInterval);
     if (matchedIdx !== -1 && matchedIdx < SRS_INTERVALS.length - 1) {
-      nextInterval = SRS_INTERVALS[matchedIdx + 1];
+      // 增加数组上限安全保护，确保索引不越界
+      const safeIdx = Math.min(matchedIdx + 1, SRS_INTERVALS.length - 1);
+      nextInterval = SRS_INTERVALS[safeIdx] || 30;
     } else if (currentInterval >= 30) {
-      // 达到或超过 30 天，进入长期巩固期，间隔翻倍
-      nextInterval = Math.round(currentInterval * 2);
+      // 达到或超过 30 天，进入长期巩固期，间隔翻倍（最大上限 365 天）
+      nextInterval = Math.min(365, Math.round(currentInterval * 2));
     } else {
       // 从未背过(0天)或自定义天数，取首个大于当前值的阶梯
       const higher = SRS_INTERVALS.find(i => i > currentInterval);
@@ -685,8 +834,12 @@ const SRSService = {
     }
 
     const now = Date.now();
-    // 计算下次复习时间戳（当前时间 + interval 天）
-    const nextReviewDate = now + (nextInterval * 24 * 60 * 60 * 1000);
+    // 自然日零点归一化：将下一次复习时间锁定在目标日期的 00:00:00，杜绝深夜背词导致次日早晨复习时间漂移
+    const targetDate = new Date(now);
+    targetDate.setDate(targetDate.getDate() + nextInterval);
+    targetDate.setHours(0, 0, 0, 0);
+    const nextReviewDate = targetDate.getTime();
+
     // 间隔达到 15 天及以上时归为已掌握
     const status = nextInterval >= 15 ? 'mastered' : 'learning';
 
@@ -694,31 +847,57 @@ const SRSService = {
       interval: nextInterval,
       nextReviewDate: nextReviewDate,
       status: status,
-      reviewCount: (Number(word.reviewCount) || 0) + 1,
+      reviewCount: currentReviewCount + 1,
       lastReviewedAt: now
     };
   },
 
   /**
-   * 点击“模糊 / 忘记”重置间隔
-   * 规则：将间隔重置为当天（interval = 0），放回当天复习队列再次强化
+   * 点击“模糊 / 忘记 / 答错”：阶梯平滑退火衰减（SM-2 启发，拒绝一刀切清零）
+   * 规则：
+   * - 原间隔 >= 30 天：平滑衰减至 7 天 (保留深层记忆)
+   * - 原间隔 >= 7 天：平滑衰减至 3 天
+   * - 原间隔 >= 3 天：平滑衰减至 1 天
+   * - 原间隔 <= 1 天：重置为 0 天 (放入今日待强化队列)
    * @param {Object} word
    * @returns {{ interval: number, nextReviewDate: number, status: string, reviewCount: number, lastReviewedAt: number }}
    */
   calculateFuzzy(word) {
+    const currentInterval = Number(word.interval) || 0;
+    const currentReviewCount = Number(word.reviewCount) || 0;
     const now = Date.now();
+    let newInterval = 0;
+
+    if (currentInterval >= 30) {
+      newInterval = 7;
+    } else if (currentInterval >= 7) {
+      newInterval = 3;
+    } else if (currentInterval >= 3) {
+      newInterval = 1;
+    } else {
+      newInterval = 0;
+    }
+
+    let nextReviewDate = now;
+    if (newInterval > 0) {
+      const targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + newInterval);
+      targetDate.setHours(0, 0, 0, 0);
+      nextReviewDate = targetDate.getTime();
+    }
+
     return {
-      interval: 0,
-      nextReviewDate: now,
+      interval: newInterval,
+      nextReviewDate: nextReviewDate,
       status: 'learning',
-      reviewCount: (Number(word.reviewCount) || 0) + 1,
+      reviewCount: Math.max(1, currentReviewCount), // 不粗暴清零，保留学习轨迹
       lastReviewedAt: now
     };
   },
 
   /**
    * 每日任务生成：优先提取已学且到期的复习单词，未学新词每日限量引入（默认 20 词）
-   * 彻底避免数千生词一次性堆积到首日任务队列造成体验灾难
+   * 增加本地时钟篡改/未来超大时间戳防冻结保护
    * @param {Array} words 全量单词列表
    * @param {number} [newLimit=20] 每日新词限额
    * @returns {Array} 今日待复习与学习单词列表
@@ -726,20 +905,27 @@ const SRSService = {
   generateTodayTasks(words, newLimit = 20) {
     if (!Array.isArray(words) || words.length === 0) return [];
 
-    // 计算今天结束的临界时间（23:59:59.999）
+    const now = Date.now();
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
     const threshold = endOfToday.getTime();
 
-    // 1. 已学过且当前已到期的复习词汇 (reviewCount > 0 或处于 learning/mastered 阶段)
+    // 1. 已学过且当前已到期的复习词汇
     const dueWords = [];
-    // 2. 从未背过的新词 (reviewCount === 0 或 status === 'new')
+    // 2. 从未背过的新词
     const newWords = [];
 
     for (const w of words) {
+      // 本地时钟篡改保护：若未来时间戳异常超过 365 天，自动修正归位为今日到期
+      let nextReviewDate = Number(w.nextReviewDate) || 0;
+      if (nextReviewDate > now + (365 * 24 * 60 * 60 * 1000)) {
+        nextReviewDate = threshold;
+        w.nextReviewDate = nextReviewDate;
+      }
+
       const isLearned = (Number(w.reviewCount) > 0) || (w.status === 'learning') || (w.status === 'mastered');
       if (isLearned) {
-        if (Number(w.nextReviewDate) <= threshold) {
+        if (nextReviewDate <= threshold) {
           dueWords.push(w);
         }
       } else {
@@ -862,49 +1048,46 @@ const StatsService = {
 
   /**
    * 计算连续打卡天数（Streak）
-   * 规则：
-   * - 检查今天是否已打卡 (today in checkInDates)
-   *   - 如果今天已打卡：从今天开始往前倒推连续打卡天数
-   *   - 如果今天未打卡，但昨天已打卡：Streak 处于保留待续状态，从昨天开始往前倒推连续打卡天数
-   *   - 如果今天和昨天都未打卡：Streak 中断归零 (0)
+   * 采用绝对自然日 UTC 整数天数差比对，彻底解决夏令时、深夜跨天（如昨天 23:50 与今天 00:20）打卡断签误判
    */
   calculateStreak(checkInDates = []) {
     if (!Array.isArray(checkInDates) || checkInDates.length === 0) return 0;
-    const dateSet = new Set(checkInDates);
+
+    // 清洗并排序有效 YYYY-MM-DD 日期
+    const validDates = Array.from(new Set(checkInDates.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)))).sort();
+    if (validDates.length === 0) return 0;
+
+    const parseUtcDays = (str) => {
+      const [y, m, d] = str.split('-').map(Number);
+      return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+    };
 
     const todayStr = this.formatDate();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = this.formatDate(yesterday);
+    const todayDays = parseUtcDays(todayStr);
 
-    let streak = 0;
-    let checkDate = new Date();
+    const lastCheckInStr = validDates[validDates.length - 1];
+    const lastCheckInDays = parseUtcDays(lastCheckInStr);
 
-    if (dateSet.has(todayStr)) {
-      // 今天已打卡，从今天开始往前回溯
-      while (true) {
-        const dStr = this.formatDate(checkDate);
-        if (dateSet.has(dStr)) {
-          streak++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
+    // 如果最后一次打卡距今超过 1 天（即昨天和今天均未打卡），连续天数中断归零
+    if (todayDays - lastCheckInDays > 1) {
+      return 0;
+    }
+
+    // 从最近一次打卡往前倒推统计连续天数
+    let streak = 1;
+    let expectedDays = lastCheckInDays;
+
+    for (let i = validDates.length - 2; i >= 0; i--) {
+      const currentDays = parseUtcDays(validDates[i]);
+      if (currentDays === expectedDays - 1) {
+        streak++;
+        expectedDays = currentDays;
+      } else if (currentDays === expectedDays) {
+        // 重复打卡跳过
+        continue;
+      } else {
+        break;
       }
-    } else if (dateSet.has(yesterdayStr)) {
-      // 今天尚未打卡，但昨天打卡了，连续天数暂时保持昨天的连续值
-      checkDate = yesterday;
-      while (true) {
-        const dStr = this.formatDate(checkDate);
-        if (dateSet.has(dStr)) {
-          streak++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
-      }
-    } else {
-      streak = 0;
     }
 
     return streak;

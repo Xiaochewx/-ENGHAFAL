@@ -8,6 +8,7 @@
   <!-- PWA 标准清单与多端适配配置 -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#C5A059">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="不背英语">
@@ -77,20 +78,35 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* 3D 翻转核心样式 */
+    /* 3D 翻转核心样式与防闪烁/透视穿透保护 */
     .perspective-1000 {
       perspective: 1000px;
+      -webkit-perspective: 1000px;
     }
     .transform-style-3d {
       transform-style: preserve-3d;
       -webkit-transform-style: preserve-3d;
     }
-    .backface-hidden {
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
+    .backface-hidden, .card-face {
+      backface-visibility: hidden !important;
+      -webkit-backface-visibility: hidden !important;
+      transform-style: preserve-3d !important;
+      -webkit-transform-style: preserve-3d !important;
     }
     .rotate-y-180 {
       transform: rotateY(180deg);
+    }
+
+    /* 国际音标 (IPA) 字体回退栈，杜绝生僻倒音标方块豆腐块 */
+    .ipa-font {
+      font-family: 'Charis SIL', 'Doulos SIL', 'DejaVu Sans', 'Lucida Sans Unicode', 'Arial Unicode MS', system-ui, -apple-system, sans-serif;
+    }
+
+    /* 移动端 dvh 动态视口高度适配软键盘 */
+    @supports (height: 100dvh) {
+      .app-viewport {
+        height: 100dvh !important;
+      }
     }
 
     /* 隐藏横向滚动条 */
@@ -144,8 +160,8 @@
 
 <body class="h-full bg-zinc-100 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 transition-colors duration-200 antialiased flex flex-col justify-center items-center">
 
-  <!-- 移动端优先居中视图容器（手机端全屏，桌面端卡片化展示） -->
-  <div class="w-full max-w-md h-full sm:h-[860px] sm:max-h-[92vh] flex flex-col bg-white dark:bg-zinc-900 sm:rounded-3xl sm:shadow-2xl sm:border sm:border-zinc-200/80 dark:sm:border-zinc-800/80 overflow-hidden relative">
+  <!-- 移动端优先居中视图容器（手机端全屏，桌面端卡片化展示，适配 dvh） -->
+  <div class="w-full max-w-md h-full sm:h-[860px] sm:max-h-[92vh] flex flex-col bg-white dark:bg-zinc-900 sm:rounded-3xl sm:shadow-2xl sm:border sm:border-zinc-200/80 dark:sm:border-zinc-800/80 overflow-hidden relative app-viewport">
 
     <!-- 1. 顶部导航栏 -->
     <header class="flex-shrink-0 px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/70 flex items-center justify-between">
@@ -479,12 +495,22 @@
       <!-- 3. 底部状态栏：今日已学进度条与简要计数 -->
       <footer class="flex-shrink-0 px-5 py-4 bg-zinc-50/70 dark:bg-zinc-900/90 border-t border-zinc-100 dark:border-zinc-800/70">
         <div class="flex items-center justify-between text-xs mb-2">
-          <span class="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-gold-500" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
-            </svg>
-            <span id="practice-status-label">今日待复习</span>
-          </span>
+          <div class="flex items-center gap-2">
+            <button id="btn-undo" type="button" title="撤回上一张卡片 (快捷键: Z / Ctrl+Z)" class="hidden py-1 px-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-gold-50 dark:hover:bg-gold-950/50 text-zinc-600 dark:text-zinc-300 hover:text-gold-700 dark:hover:text-gold-300 text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 border border-zinc-200/80 dark:border-zinc-700 shadow-2xs">
+              <svg class="w-3.5 h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 7v6h6"></path>
+                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+              </svg>
+              <span>撤回</span>
+              <kbd class="hidden sm:inline-block px-1 rounded bg-zinc-200 dark:bg-zinc-700 text-[9px] font-mono">Z</kbd>
+            </button>
+            <span class="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-gold-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
+              </svg>
+              <span id="practice-status-label">今日待复习</span>
+            </span>
+          </div>
           <div class="font-mono">
             <span id="learned-count" class="font-bold text-zinc-900 dark:text-zinc-100">0</span>
             <span id="total-count" class="text-zinc-400">/ 15 词</span>
@@ -1737,6 +1763,65 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     const progressPercentEl = document.getElementById('progress-percent');
     const progressBarFill = document.getElementById('progress-bar-fill');
 
+    // 闪卡复习撤销栈与误触回滚机制 (Undo Stack)
+    const btnUndo = document.getElementById('btn-undo');
+    const reviewHistoryStack = [];
+    const MAX_UNDO_DEPTH = 10;
+
+    function pushUndoSnapshot(action, wordItem, prevIndex) {
+      reviewHistoryStack.push({
+        action,
+        wordSnapshot: { ...wordItem },
+        index: prevIndex,
+        queueSnapshot: practiceQueue.map(w => ({ ...w })),
+        completedCount: completedTodayCount
+      });
+      if (reviewHistoryStack.length > MAX_UNDO_DEPTH) {
+        reviewHistoryStack.shift();
+      }
+      updateUndoButtonState();
+    }
+
+    function updateUndoButtonState() {
+      if (!btnUndo) return;
+      if (reviewHistoryStack.length > 0 && currentTab === 'practice') {
+        btnUndo.classList.remove('hidden');
+      } else {
+        btnUndo.classList.add('hidden');
+      }
+    }
+
+    async function handleUndo() {
+      if (reviewHistoryStack.length === 0) {
+        showToast('暂无可撤回的复习记录', 'ℹ️');
+        return;
+      }
+      const lastOp = reviewHistoryStack.pop();
+      updateUndoButtonState();
+
+      const { wordSnapshot, index, queueSnapshot, completedCount } = lastOp;
+      await DataService.updateWord(wordSnapshot.id, wordSnapshot);
+
+      practiceQueue = queueSnapshot;
+      currentIndex = Math.max(0, Math.min(index, practiceQueue.length - 1));
+      completedTodayCount = completedCount;
+
+      const allIdx = allVocabulary.findIndex(w => w.id === wordSnapshot.id);
+      if (allIdx !== -1) {
+        allVocabulary[allIdx] = { ...wordSnapshot };
+      }
+
+      isFlipped = false;
+      flashcard.classList.remove('rotate-y-180');
+      renderCurrentWord();
+      updateProgress();
+      renderLibraryView();
+      HapticService.light();
+      showToast(`已撤回对 "${wordSnapshot.word}" 的判定`, '↩️');
+    }
+
+    btnUndo?.addEventListener('click', handleUndo);
+
     // 初始化界面渲染
     function renderCurrentWord() {
       if (practiceQueue.length === 0 || currentIndex >= practiceQueue.length) {
@@ -1758,6 +1843,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       frontWord.textContent = item.word;
       if (item.phonetic && item.phonetic.trim()) {
         frontPhonetic.textContent = item.phonetic.trim();
+        frontPhonetic.classList.add('ipa-font');
         frontPhonetic.style.display = '';
       } else {
         frontPhonetic.textContent = '';
@@ -1775,7 +1861,23 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       backWord.textContent = item.word;
       backPos.textContent = item.partOfSpeech;
       backDefinition.textContent = item.definition;
-      backExampleEn.textContent = `"${item.exampleEn}"`;
+
+      // 动态将例句中的目标考查单词加粗高亮标黄 (不区分大小写，词边界匹配)
+      if (item.exampleEn && item.exampleEn.trim()) {
+        const rawEn = item.exampleEn.trim();
+        const cleanWord = item.word.trim();
+        try {
+          const escapedWord = cleanWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\b(${escapedWord})\\b`, 'gi');
+          const safeEn = escapeHtml(rawEn);
+          const highlighted = safeEn.replace(regex, '<mark class="bg-gold-200/90 dark:bg-gold-950/90 text-gold-900 dark:text-gold-200 font-bold px-1 py-0.5 rounded border border-gold-300/40">$1</mark>');
+          backExampleEn.innerHTML = `"${highlighted}"`;
+        } catch (e) {
+          backExampleEn.textContent = `"${rawEn}"`;
+        }
+      } else {
+        backExampleEn.textContent = 'No example sentence available.';
+      }
       backExampleCn.textContent = item.exampleCn;
 
       // 回显我的造句 / 记忆笔记
@@ -1791,6 +1893,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         const countNum = Number(item.reviewCount) || 0;
         backSrsStage.textContent = `${dueInfo.text} · 阶段: ${intervalNum}天 (已复习${countNum}次)`;
       }
+
+      updateUndoButtonState();
 
       // 翻转状态复位为正面与滑动位移复位
       if (isFlipped) {
@@ -1943,6 +2047,21 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         return voices.find(v => v.lang.toLowerCase().startsWith('en')) || null;
       },
 
+      unlocked: false,
+
+      /**
+       * 移动端与桌面端交互时静音解锁 Web Speech API
+       */
+      unlockAudio() {
+        if (!('speechSynthesis' in window) || this.unlocked) return;
+        try {
+          const silentUtterance = new SpeechSynthesisUtterance('');
+          silentUtterance.volume = 0;
+          window.speechSynthesis.speak(silentUtterance);
+          this.unlocked = true;
+        } catch (e) {}
+      },
+
       /**
        * 核心朗读函数
        * @param {string} text - 朗读文本
@@ -1966,7 +2085,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
         if (bestVoice) {
           utterance.voice = bestVoice;
-          utterance.lang = bestVoice.lang;
+          utterance.lang = bestVoice.lang || 'en-US';
         } else {
           utterance.lang = 'en-US';
         }
@@ -1988,6 +2107,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         utterance.onend = handleFinish;
         utterance.onerror = (e) => {
           console.warn('SpeechSynthesis 朗读被中断或发生异常:', e);
+          if (e.error === 'network') {
+            showToast('发音网络请求超时，请检查网络或离线语音包', '⚠️');
+          }
           handleFinish();
         };
 
@@ -2010,8 +2132,10 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       }
     };
 
-    // 初始化语音引擎
+    // 初始化语音引擎与用户首次手势解锁
     AudioService.init();
+    document.addEventListener('touchstart', () => AudioService.unlockAudio(), { once: true, passive: true });
+    document.addEventListener('click', () => AudioService.unlockAudio(), { once: true });
 
     /* ---------------- 4. 事件监听绑定 ---------------- */
     const pronounceExampleBtn = document.getElementById('pronounce-example-btn');
@@ -2257,7 +2381,10 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       const currentItem = practiceQueue[currentIndex];
       if (!currentItem) return;
 
-      // 1. 算法：重置复习间隔为当天 (interval = 0)
+      // 记录撤回快照 (Undo Snapshot)
+      pushUndoSnapshot('fuzzy', currentItem, currentIndex);
+
+      // 1. 算法：平滑退火衰减复习间隔
       const updates = SRSService.calculateFuzzy(currentItem);
       Object.assign(currentItem, updates);
 
@@ -2305,6 +2432,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
       const currentItem = practiceQueue[currentIndex];
       if (!currentItem) return;
+
+      // 记录撤回快照 (Undo Snapshot)
+      pushUndoSnapshot('mastered', currentItem, currentIndex);
 
       // 1. 算法：递增记忆阶梯 (0 -> 1 -> 3 -> 7 -> 15 -> 30 天)
       const updates = SRSService.calculateMastered(currentItem);
@@ -2664,7 +2794,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         spellingPhonetic.style.display = 'none';
       }
       spellingDefinition.textContent = item.definition;
-      spellingLetterCount.textContent = cleanWord.length;
+      const letterOnlyCount = cleanWord.replace(/[^a-zA-Z]/g, '').length;
+      spellingLetterCount.textContent = letterOnlyCount || cleanWord.length;
 
       // 渲染字母下划线槽位（不泄露真实字母）
       spellingSlotsContainer.innerHTML = Array.from(cleanWord).map(ch => {
@@ -2724,7 +2855,12 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         showToast(`今日复习已达 5 词，打卡成功！🔥 连续 ${statsRes.streak} 天`, '🎉');
       }
 
-      if (userVal === targetVal) {
+      // 智能比对：支持严格全等，或忽略中划线/空格/单引号的容错全等
+      const normUser = userVal.replace(/['’\-\s]+/g, ' ');
+      const normTarget = targetVal.replace(/['’\-\s]+/g, ' ');
+      const isCorrect = (userVal === targetVal) || (normUser === normTarget);
+
+      if (isCorrect) {
         // ========== 判定：拼写正确 ==========
         HapticService.success();
         spellingInput.disabled = true;
@@ -2749,6 +2885,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         HapticService.warning();
         spellingIsAwaitingNext = true;
         spellingWrongIds.add(item.id);
+
+        // 联动艾宾浩斯算法：将答错词记忆进度降级重练，消除记忆孤岛
+        DataService.downgradeWord(item.id);
 
         // 将该词推入重练队列，保证本轮最后继续出现直到完全掌握
         if (!spellingRetryQueue.some(w => w.id === item.id)) {
@@ -2870,20 +3009,27 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       if (word) AudioService.speak(word, btn, 0.88);
     });
 
-    // 全局键盘快捷键映射与防误触防护机制 (Space 翻转/发音, ←/1 模糊, →/2 掌握, R 重播, N 新增)
+    // 全局键盘快捷键映射与防误触防护机制 (Space 翻转/发音, ←/1 模糊, →/2 掌握, R 重播, N 新增, Z/Ctrl+Z 撤销)
     window.addEventListener('keydown', (e) => {
-      // 1. 防误触机制：若当前焦点在任何可输入元素（input / textarea / select / contentEditable），自动禁用全局快捷键
+      // 1. 防误触机制：若当前事件源或焦点在任何可输入元素（input / textarea / select / contentEditable），自动禁用全局快捷键
       const activeEl = document.activeElement;
-      const tagName = activeEl ? activeEl.tagName.toUpperCase() : '';
-      if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || activeEl?.isContentEditable) {
+      const targetEl = e.target;
+      const isInputLike = (el) => {
+        if (!el) return false;
+        const tag = el.tagName ? el.tagName.toUpperCase() : '';
+        return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+      };
+
+      if (isInputLike(activeEl) || isInputLike(targetEl)) {
         return;
       }
 
-      // 2. 检查是否有弹窗正处于打开状态（添加生词、删除、导入、成就弹窗）
+      // 2. 检查是否有任何弹窗正处于打开状态（添加生词、删除、导入、云同步、成就弹窗）
       const isAnyModalOpen = 
         (addModal && !addModal.classList.contains('opacity-0')) ||
         (deleteModal && !deleteModal.classList.contains('opacity-0')) ||
         (importModal && !importModal.classList.contains('opacity-0')) ||
+        (cloudModal && !cloudModal.classList.contains('opacity-0')) ||
         (achievementModal && !achievementModal.classList.contains('opacity-0'));
 
       if (isAnyModalOpen) {
@@ -2893,14 +3039,23 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       const key = e.key;
       const code = e.code;
 
-      // 3. 按键 N / n：调出新增生词弹窗
+      // 3. 按键 Z 或 Ctrl+Z / Meta+Z：撤销上一步操作
+      if (key === 'z' || key === 'Z') {
+        if (currentTab === 'practice') {
+          e.preventDefault();
+          handleUndo();
+          return;
+        }
+      }
+
+      // 4. 按键 N / n：调出新增生词弹窗
       if (key === 'n' || key === 'N') {
         e.preventDefault();
         openAddModal();
         return;
       }
 
-      // 4. 按键 R / r：单独重复朗读当前单词发音
+      // 5. 按键 R / r：单独重复朗读当前单词发音
       if (key === 'r' || key === 'R') {
         e.preventDefault();
         if (currentTab === 'practice') {
@@ -2916,7 +3071,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         return;
       }
 
-      // 5. Space（空格键）：翻转卡片 / 播放发音
+      // 6. Space（空格键）：翻转卡片 / 播放发音
       if (code === 'Space' || key === ' ') {
         e.preventDefault();
         if (currentTab === 'practice') {
@@ -2933,7 +3088,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         return;
       }
 
-      // 6. 方向键 Left（左箭头）或 1：标记为“模糊 / 重新学”
+      // 7. 方向键 Left（左箭头）或 1：标记为“模糊 / 重新学”
       if (key === 'ArrowLeft' || key === '1') {
         if (currentTab === 'practice' && !flashcard.classList.contains('hidden')) {
           e.preventDefault();
@@ -2942,7 +3097,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         return;
       }
 
-      // 7. 方向键 Right（右箭头）或 2：标记为“已掌握”
+      // 8. 方向键 Right（右箭头）或 2：标记为“已掌握”
       if (key === 'ArrowRight' || key === '2') {
         if (currentTab === 'practice' && !flashcard.classList.contains('hidden')) {
           e.preventDefault();
@@ -3044,11 +3199,25 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     function generateQuizOptions(correctItem, questionType) {
       const correctText = (questionType === 'type1' ? correctItem.definition : correctItem.word) || '';
 
-      // 高效 O(1) 随机抽取 3 个互不相同且与正解不同的干扰项，避免对数千单词全量打乱排序
+      const isTooSimilar = (t1, t2) => {
+        if (!t1 || !t2) return false;
+        const s1 = t1.trim().toLowerCase();
+        const s2 = t2.trim().toLowerCase();
+        if (s1 === s2) return true;
+        if (questionType === 'type1') {
+          // 对中文释义进行包含/重合度检测，避免选出“开心”与“高兴”等产生争议的双正解
+          if (s1.length >= 2 && s2.length >= 2) {
+            if (s1.includes(s2) || s2.includes(s1)) return true;
+          }
+        }
+        return false;
+      };
+
+      // 高效 O(1) 随机抽取 3 个互不相同且与正解语义无重合的干扰项
       const distractors = [];
       const usedIds = new Set([correctItem.id]);
-      const usedTexts = new Set([correctText.trim().toLowerCase()]);
-      const maxAttempts = 60;
+      const usedTexts = [correctText.trim().toLowerCase()];
+      const maxAttempts = 80;
       let attempts = 0;
 
       while (distractors.length < 3 && attempts < maxAttempts && allVocabulary.length > distractors.length + 1) {
@@ -3059,9 +3228,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
         const candText = (questionType === 'type1' ? cand.definition : cand.word) || '';
         const candKey = candText.trim().toLowerCase();
-        if (candKey && !usedTexts.has(candKey)) {
+        if (candKey && !usedTexts.some(u => isTooSimilar(u, candKey))) {
           usedIds.add(cand.id);
-          usedTexts.add(candKey);
+          usedTexts.push(candKey);
           distractors.push(cand);
         }
       }
@@ -3073,9 +3242,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
           if (!cand || usedIds.has(cand.id)) continue;
           const candText = (questionType === 'type1' ? cand.definition : cand.word) || '';
           const candKey = candText.trim().toLowerCase();
-          if (candKey && !usedTexts.has(candKey)) {
+          if (candKey && !usedTexts.some(u => isTooSimilar(u, candKey))) {
             usedIds.add(cand.id);
-            usedTexts.add(candKey);
+            usedTexts.push(candKey);
             distractors.push(cand);
           }
         }
@@ -3266,6 +3435,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       } else {
         // ========== 答错逻辑 ==========
         HapticService.warning();
+        // 联动艾宾浩斯记忆库：降级重练错词
+        DataService.downgradeWord(currentItem.id);
+
         quizWrongItems.push({
           wordItem: currentItem,
           userSelected: selectedOpt.text,
@@ -3313,6 +3485,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       quizTotalAnswerTime += quizTimeTotalAllowed;
 
       const currentItem = quizQueue[quizCurrentIndex];
+      // 联动艾宾浩斯记忆库：超时未作答同样降级重练
+      if (currentItem) DataService.downgradeWord(currentItem.id);
+
       quizWrongItems.push({
         wordItem: currentItem,
         userSelected: '超时未作答',
@@ -3482,8 +3657,17 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     let pendingDeleteWordId = null;
 
     // 1. 五 Tab 模式切换
-    function switchTab(tab) {
+    // 1. 五 Tab 模式切换 (支持浏览器前进后退与轻量 History API 状态机)
+    function switchTab(tab, pushHistory = true) {
       currentTab = tab;
+
+      if (pushHistory) {
+        try {
+          if (window.location.hash !== `#${tab}`) {
+            history.pushState({ tab }, '', `#${tab}`);
+          }
+        } catch (e) {}
+      }
 
       // 切换离开自测或拼写时，安全清理定时器与重播
       if (quizTimerInterval) clearInterval(quizTimerInterval);
@@ -3537,6 +3721,58 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     tabLibraryBtn.addEventListener('click', () => switchTab('library'));
     tabStatsBtn?.addEventListener('click', () => switchTab('stats'));
     libraryQuickAddBtn.addEventListener('click', openAddModal);
+
+    // History API 浏览器前进/后退/手机侧滑返回拦截与弹窗安全关闭
+    window.addEventListener('popstate', (e) => {
+      // 1. 优先检查并关闭顶层开启的弹窗
+      if (achievementModal && !achievementModal.classList.contains('opacity-0')) {
+        closeAchievementModal();
+        return;
+      }
+      if (cloudModal && !cloudModal.classList.contains('opacity-0')) {
+        closeCloudModal();
+        return;
+      }
+      if (importModal && !importModal.classList.contains('opacity-0')) {
+        closeImportModal();
+        return;
+      }
+      if (deleteModal && !deleteModal.classList.contains('opacity-0')) {
+        closeDeleteModal();
+        return;
+      }
+      if (addModal && !addModal.classList.contains('opacity-0')) {
+        closeAddModal();
+        return;
+      }
+
+      // 2. 无弹窗时根据历史记录状态或 hash 切换 Tab
+      const targetTab = e.state?.tab || window.location.hash.replace('#', '') || 'practice';
+      if (['practice', 'spelling', 'quiz', 'library', 'stats'].includes(targetTab)) {
+        switchTab(targetTab, false);
+      }
+    });
+
+    // 跨标签页多窗口数据同步 (Storage Event Listener)
+    window.addEventListener('storage', async (e) => {
+      if (e.key === 'bubei_vocabulary_v1' || e.key === 'bubei_data_sync_trigger' || e.key === 'bubei_review_streak_stats') {
+        try {
+          allVocabulary = await DataService.getVocabulary();
+          tabLibraryBadge.textContent = allVocabulary.length;
+          practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+          if (currentIndex >= practiceQueue.length && practiceQueue.length > 0) {
+            currentIndex = practiceQueue.length - 1;
+          }
+          updateProgress();
+          renderCurrentWord();
+          updateHeaderStreak();
+          if (currentTab === 'library') renderLibraryView();
+          if (currentTab === 'stats') renderStatsView();
+        } catch (err) {
+          console.warn('[StorageSync] 多标签同步异常:', err);
+        }
+      }
+    });
 
     // 2. 渲染词库管理页面
     function renderLibraryView() {
@@ -3758,16 +3994,21 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       libraryTagsBar.innerHTML = html;
     }
 
-    // 3. 搜索与筛选监听事件绑定
+    // 3. 搜索与筛选监听事件绑定 (250ms 防抖，杜绝大词库频繁重绘卡顿)
+    let librarySearchDebounce = null;
     librarySearchInput.addEventListener('input', (e) => {
-      searchKeyword = e.target.value.trim();
+      const val = e.target.value.trim();
+      searchKeyword = val;
       libraryPageLimit = 80;
       if (searchKeyword) {
         librarySearchClear.classList.remove('hidden');
       } else {
         librarySearchClear.classList.add('hidden');
       }
-      renderLibraryView();
+      if (librarySearchDebounce) clearTimeout(librarySearchDebounce);
+      librarySearchDebounce = setTimeout(() => {
+        renderLibraryView();
+      }, 250);
     });
 
     librarySearchClear.addEventListener('click', () => {
@@ -3881,7 +4122,15 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         if (removeSIdx !== -1) {
           spellingQueue.splice(removeSIdx, 1);
         }
+        const removeQIdx = quizQueue.findIndex(w => w.id === pendingDeleteWordId);
+        if (removeQIdx !== -1) {
+          quizQueue.splice(removeQIdx, 1);
+        }
         spellingWrongIds.delete(pendingDeleteWordId);
+
+        // 级联清理撤销快照，避免撤销复活已彻底删除的词
+        reviewHistoryStack = reviewHistoryStack.filter(snap => snap.wordItem?.id !== pendingDeleteWordId);
+        updateUndoButtonState();
 
         // 处理背词模式下标保护
         if (currentIndex >= practiceQueue.length && practiceQueue.length > 0) {
@@ -4592,6 +4841,16 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
       renderLibraryView();
       renderAchievementsShowcase();
+
+      // 路由恢复：若 URL 携带 #spelling, #quiz 等自动定位到对应 Tab
+      const hashTab = window.location.hash.replace('#', '');
+      if (['practice', 'spelling', 'quiz', 'library', 'stats'].includes(hashTab)) {
+        switchTab(hashTab, false);
+      } else {
+        try {
+          history.replaceState({ tab: 'practice' }, '', '#practice');
+        } catch (e) {}
+      }
     }
 
     /* ---------------- 8. PWA Service Worker 注册与安装提示横幅 ---------------- */
@@ -4613,16 +4872,14 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       pwaInstallBanner.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
     }
 
-    // 隐藏安装横幅
     function hideInstallBanner() {
       if (!pwaInstallBanner) return;
       pwaInstallBanner.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
       pwaInstallBanner.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
     }
 
-    // 捕获浏览器 PWA 安装事件
+    // 捕获系统安装意图事件
     window.addEventListener('beforeinstallprompt', (e) => {
-      // 阻止浏览器默认的 mini-infobar 弹窗，采用应用内哑光金定制横幅
       e.preventDefault();
       deferredInstallPrompt = e;
       showInstallBanner();
@@ -4658,12 +4915,33 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       showToast('已成功安装为独立 App！🎉', '✨');
     });
 
-    // 注册 Service Worker (保证页面初次快速渲染后再注册)
+    // 移动端视口 (visualViewport) 虚拟键盘防遮挡自适应
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+          setTimeout(() => {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 120);
+        }
+      });
+    }
+
+    // 注册 Service Worker 并监听新版本更新推送
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
           .then((registration) => {
             console.log('[PWA] Service Worker 注册成功，Scope:', registration.scope);
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  showToast('检测到新版本发布，刷新即可体验更新！🚀', '✨');
+                }
+              });
+            });
           })
           .catch((error) => {
             console.warn('[PWA] Service Worker 注册失败:', error);
