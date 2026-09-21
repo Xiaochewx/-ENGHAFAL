@@ -1467,6 +1467,8 @@
       </button>
 
     </div>
+  </div>
+
   <!-- ==================== 8. Supabase 云端同步模态弹窗 ==================== -->
   <div id="cloud-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
     <div id="cloud-modal-content" class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200/90 dark:border-zinc-800 p-6 transform transition-all duration-300 scale-95 max-h-[90vh] overflow-y-auto text-left">
@@ -1803,7 +1805,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
   </div>
 
   <!-- ==================== 重置应用确认模态弹窗 (Reset Confirm Modal) ==================== -->
-  <div id="reset-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
+  <div id="reset-modal" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
     <div id="reset-modal-content" class="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200/90 dark:border-zinc-800 p-6 transform transition-all duration-300 scale-95 text-center">
       <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 border border-rose-200/60 dark:border-rose-800/40 flex items-center justify-center mx-auto mb-3.5 shadow-xs">
         <svg class="w-6 h-6 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -2031,7 +2033,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
     // 闪卡复习撤销栈与误触回滚机制 (Undo Stack)
     const btnUndo = document.getElementById('btn-undo');
-    const reviewHistoryStack = [];
+    let reviewHistoryStack = [];
     const MAX_UNDO_DEPTH = 10;
 
     function pushUndoSnapshot(action, wordItem, prevIndex) {
@@ -4664,66 +4666,79 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     const confirmResetBtn = document.getElementById('confirm-reset-btn');
     const libraryResetBtn = document.getElementById('library-reset-btn');
 
-    function openSettingsModal() {
-      if (!settingsModal) return;
-      if (settingsWordCount) {
-        settingsWordCount.textContent = `${allVocabulary.length} 词`;
+    function openSettingsModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
       }
+      if (!settingsModal) return;
 
-      // 回显最新设置项
-      const settings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : {
-        dailyNewLimit: 20,
-        studyBand: 'all',
-        accent: 'us',
-        autoPronounce: false
-      };
+      try {
+        if (settingsWordCount && Array.isArray(allVocabulary)) {
+          settingsWordCount.textContent = `${allVocabulary.length} 词`;
+        }
 
-      const dailyLimitEl = document.getElementById('settings-daily-limit');
-      if (dailyLimitEl) dailyLimitEl.value = String(settings.dailyNewLimit || 20);
+        // 回显最新设置项
+        const settings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : {
+          dailyNewLimit: 20,
+          studyBand: 'all',
+          accent: 'us',
+          autoPronounce: false
+        };
 
-      const studyBandEl = document.getElementById('settings-study-band');
-      if (studyBandEl) studyBandEl.value = settings.studyBand || 'all';
+        const dailyLimitEl = document.getElementById('settings-daily-limit');
+        if (dailyLimitEl) dailyLimitEl.value = String(settings.dailyNewLimit || 20);
 
-      const accentEl = document.getElementById('settings-accent');
-      if (accentEl) accentEl.value = settings.accent || 'us';
+        const studyBandEl = document.getElementById('settings-study-band');
+        if (studyBandEl) studyBandEl.value = settings.studyBand || 'all';
 
-      const autoPronounceEl = document.getElementById('settings-auto-pronounce');
-      if (autoPronounceEl) autoPronounceEl.checked = !!settings.autoPronounce;
+        const accentEl = document.getElementById('settings-accent');
+        if (accentEl) accentEl.value = settings.accent || 'us';
 
-      const deviceIdEl = document.getElementById('settings-device-id');
-      if (deviceIdEl && typeof getDeviceId === 'function') {
-        const devId = getDeviceId();
-        deviceIdEl.textContent = devId;
-        deviceIdEl.title = devId;
+        const autoPronounceEl = document.getElementById('settings-auto-pronounce');
+        if (autoPronounceEl) autoPronounceEl.checked = !!settings.autoPronounce;
+
+        const deviceIdEl = document.getElementById('settings-device-id');
+        if (deviceIdEl && typeof getDeviceId === 'function') {
+          const devId = getDeviceId();
+          deviceIdEl.textContent = devId;
+          deviceIdEl.title = devId;
+        }
+      } catch (err) {
+        console.warn('[openSettingsModal] 回显设置项异常:', err);
       }
 
       settingsModal.classList.remove('opacity-0', 'pointer-events-none');
-      settingsModal.classList.add('opacity-100', 'pointer-events-auto');
       settingsModalContent?.classList.remove('scale-95');
-      settingsModalContent?.classList.add('scale-100');
     }
 
-    function closeSettingsModal() {
+    function closeSettingsModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (!settingsModal) return;
-      settingsModal.classList.remove('opacity-100', 'pointer-events-auto');
       settingsModal.classList.add('opacity-0', 'pointer-events-none');
-      settingsModalContent?.classList.remove('scale-100');
       settingsModalContent?.classList.add('scale-95');
     }
 
-    function openResetModal() {
+    function openResetModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (!resetModal) return;
       resetModal.classList.remove('opacity-0', 'pointer-events-none');
-      resetModal.classList.add('opacity-100', 'pointer-events-auto');
       resetModalContent?.classList.remove('scale-95');
-      resetModalContent?.classList.add('scale-100');
     }
 
-    function closeResetModal() {
+    function closeResetModal(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (!resetModal) return;
-      resetModal.classList.remove('opacity-100', 'pointer-events-auto');
       resetModal.classList.add('opacity-0', 'pointer-events-none');
-      resetModalContent?.classList.remove('scale-100');
       resetModalContent?.classList.add('scale-95');
     }
 
@@ -4736,7 +4751,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
         allVocabulary = freshWords;
         tabLibraryBadge.textContent = allVocabulary.length;
-        const currentSettings = SettingsService.getSettings();
+        const currentSettings = typeof SettingsService !== 'undefined' ? SettingsService.getSettings() : { dailyNewLimit: 20, studyBand: 'all' };
         practiceQueue = SRSService.generateTodayTasks(allVocabulary, currentSettings.dailyNewLimit, currentSettings.studyBand);
         initialDueCount = practiceQueue.length;
         completedTodayCount = 0;
@@ -4770,36 +4785,60 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     closeSettingsModalBtn?.addEventListener('click', closeSettingsModal);
     settingsDoneBtn?.addEventListener('click', closeSettingsModal);
     settingsModal?.addEventListener('click', (e) => {
-      if (e.target === settingsModal) closeSettingsModal();
+      if (e.target === settingsModal) closeSettingsModal(e);
+    });
+    settingsModalContent?.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (resetModal && !resetModal.classList.contains('opacity-0')) {
+          closeResetModal(e);
+          return;
+        }
+        if (settingsModal && !settingsModal.classList.contains('opacity-0')) {
+          closeSettingsModal(e);
+          return;
+        }
+      }
     });
 
     // 每日新学单词数更改
     document.getElementById('settings-daily-limit')?.addEventListener('change', (e) => {
       const val = Number(e.target.value) || 20;
-      SettingsService.updateSettings({ dailyNewLimit: val });
-      const currentBand = SettingsService.getSettings().studyBand;
-      practiceQueue = SRSService.generateTodayTasks(allVocabulary, val, currentBand);
-      initialDueCount = practiceQueue.length;
-      completedTodayCount = 0;
-      currentIndex = 0;
-      isFlipped = false;
-      renderCurrentWord();
-      updateProgress();
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ dailyNewLimit: val });
+        const currentBand = SettingsService.getSettings().studyBand;
+        if (Array.isArray(allVocabulary) && typeof SRSService !== 'undefined') {
+          practiceQueue = SRSService.generateTodayTasks(allVocabulary, val, currentBand);
+          initialDueCount = practiceQueue.length;
+          completedTodayCount = 0;
+          currentIndex = 0;
+          isFlipped = false;
+          renderCurrentWord();
+          updateProgress();
+        }
+      }
       showToast(`每日新学词数已设为: ${val} 词/天 🎯`, '⚙️');
     });
 
     // 词书分级选择更改
     document.getElementById('settings-study-band')?.addEventListener('change', (e) => {
       const band = e.target.value;
-      SettingsService.updateSettings({ studyBand: band });
-      const limit = SettingsService.getSettings().dailyNewLimit;
-      practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
-      initialDueCount = practiceQueue.length;
-      completedTodayCount = 0;
-      currentIndex = 0;
-      isFlipped = false;
-      renderCurrentWord();
-      updateProgress();
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ studyBand: band });
+        const limit = SettingsService.getSettings().dailyNewLimit;
+        if (Array.isArray(allVocabulary) && typeof SRSService !== 'undefined') {
+          practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
+          initialDueCount = practiceQueue.length;
+          completedTodayCount = 0;
+          currentIndex = 0;
+          isFlipped = false;
+          renderCurrentWord();
+          updateProgress();
+        }
+      }
       const bandText = e.target.options[e.target.selectedIndex]?.text || band;
       showToast(`词书规划已切换为: ${bandText}`, '📚');
     });
@@ -4807,14 +4846,18 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     // 口音切换
     document.getElementById('settings-accent')?.addEventListener('change', (e) => {
       const accent = e.target.value;
-      SettingsService.updateSettings({ accent });
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ accent });
+      }
       showToast(`已切换发音为: ${accent === 'uk' ? '英式发音 (UK)' : '美式发音 (US)'} 🔊`, '🎙️');
     });
 
     // 翻卡自动读音开关
     document.getElementById('settings-auto-pronounce')?.addEventListener('change', (e) => {
       const checked = e.target.checked;
-      SettingsService.updateSettings({ autoPronounce: checked });
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ autoPronounce: checked });
+      }
       showToast(checked ? '已开启卡片自动朗读 🔊' : '已关闭自动朗读', '💡');
     });
 
@@ -4861,15 +4904,28 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       openCloudModal();
     });
 
-    settingsTriggerResetBtn?.addEventListener('click', () => {
-      openResetModal();
+    settingsTriggerResetBtn?.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      openResetModal(e);
     });
-    libraryResetBtn?.addEventListener('click', openResetModal);
-    cancelResetBtn?.addEventListener('click', closeResetModal);
+    libraryResetBtn?.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      openResetModal(e);
+    });
+    cancelResetBtn?.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      closeResetModal(e);
+    });
     resetModal?.addEventListener('click', (e) => {
-      if (e.target === resetModal) closeResetModal();
+      if (e.target === resetModal) closeResetModal(e);
     });
-    confirmResetBtn?.addEventListener('click', handleConfirmReset);
+    resetModalContent?.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+    confirmResetBtn?.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      handleConfirmReset();
+    });
 
     // 2. 导入恢复：选择 JSON 文件并解析
     importBackupBtn?.addEventListener('click', () => {

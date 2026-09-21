@@ -63,6 +63,9 @@ const SettingsService = {
     } catch (e) {
       return DEFAULT_SETTINGS;
     }
+  },
+  updateSettings(updates) {
+    return this.saveSettings(updates);
   }
 };
 

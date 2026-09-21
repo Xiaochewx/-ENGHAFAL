@@ -7,7 +7,7 @@
  * 3. 导航离线兜底：断网时刷新或进入页面依然秒级加载已缓存的 index.html
  */
 
-const CACHE_NAME = 'bubei-vocab-pwa-v10';
+const CACHE_NAME = 'bubei-vocab-pwa-v12';
 
 // 核心预缓存资源列表（仅包含同源高稳定静态资源，避免跨域 CDN 在 install 阶段因 CORS 报错）
 const PRECACHE_ASSETS = [
