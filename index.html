@@ -1501,7 +1501,20 @@
           <span class="text-zinc-500 dark:text-zinc-400">项目终端:</span>
           <span class="font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">ikflvnmqoophvyuypxmb.supabase.co</span>
         </div>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
+          <div class="space-y-0.5">
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium block">专属同步 Key:</span>
+            <span class="text-[10px] text-zinc-400 block">各端填入相同 Key 即可自动漫游</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input id="cloud-sync-key-input" type="text" value="xiaochewx" spellcheck="false"
+                   class="font-mono text-xs font-bold text-gold-600 dark:text-gold-400 bg-white dark:bg-zinc-900 px-2 py-1 rounded-lg border border-gold-300/60 dark:border-gold-700/60 w-28 text-center focus:outline-none focus:ring-1 focus:ring-gold-500" />
+            <button id="cloud-sync-key-save-btn" type="button" class="px-2.5 py-1 bg-gold-500 hover:bg-gold-600 text-white rounded-lg text-[11px] font-bold transition-colors">
+              切换
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
           <span class="text-zinc-500 dark:text-zinc-400">连接状态:</span>
           <span id="cloud-status-text" class="inline-flex items-center gap-1.5 font-semibold text-zinc-600 dark:text-zinc-300">
             <span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span> 检测中...
@@ -1719,10 +1732,10 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
             <span id="settings-word-count" class="font-mono font-bold text-zinc-800 dark:text-zinc-200">5,998 词</span>
           </div>
           <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
-            <span class="text-zinc-500 dark:text-zinc-400 font-medium">设备独立标识码:</span>
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium">专属同步 Key:</span>
             <div class="flex items-center gap-1.5">
-              <span id="settings-device-id" class="font-mono text-[10px] font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-200/70 dark:bg-zinc-700/60 px-1.5 py-0.5 rounded">...</span>
-              <button id="settings-copy-device-id-btn" type="button" class="text-[10px] text-gold-600 hover:text-gold-500 font-bold px-1 py-0.5">复制</button>
+              <span id="settings-sync-key" class="font-mono text-[11px] font-bold text-gold-600 dark:text-gold-400 bg-gold-50 dark:bg-gold-950/50 px-2 py-0.5 rounded border border-gold-300/40">xiaochewx</span>
+              <button id="settings-copy-sync-key-btn" type="button" class="text-[10px] text-gold-600 hover:text-gold-500 font-bold px-1 py-0.5">复制</button>
             </div>
           </div>
           <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
@@ -4740,11 +4753,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         const autoCloudSyncEl = document.getElementById('settings-auto-cloud-sync');
         if (autoCloudSyncEl) autoCloudSyncEl.checked = settings.autoCloudSync !== false;
 
-        const deviceIdEl = document.getElementById('settings-device-id');
-        if (deviceIdEl && typeof getDeviceId === 'function') {
-          const devId = getDeviceId();
-          deviceIdEl.textContent = devId;
-          deviceIdEl.title = devId;
+        const syncKeyEl = document.getElementById('settings-sync-key');
+        if (syncKeyEl && typeof getSyncKey === 'function') {
+          syncKeyEl.textContent = getSyncKey();
         }
       } catch (err) {
         console.warn('[openSettingsModal] 回显设置项异常:', err);
@@ -4915,14 +4926,14 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       checkAndUpdateCloudStatus();
     });
 
-    // 复制设备同步码
-    document.getElementById('settings-copy-device-id-btn')?.addEventListener('click', async () => {
-      const devId = typeof getDeviceId === 'function' ? getDeviceId() : 'default_device';
+    // 复制专属同步 Key
+    document.getElementById('settings-copy-sync-key-btn')?.addEventListener('click', async () => {
+      const key = typeof getSyncKey === 'function' ? getSyncKey() : 'xiaochewx';
       try {
-        await navigator.clipboard.writeText(devId);
-        showToast('设备同步码已复制到剪贴板 📋', '✅');
+        await navigator.clipboard.writeText(key);
+        showToast(`专属同步 Key "${key}" 已复制！📋`, '🔑');
       } catch (err) {
-        showToast(`设备代码: ${devId}`, '📋');
+        showToast(`专属 Key: ${key}`, '📋');
       }
     });
 
@@ -5135,6 +5146,11 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       if (!cloudStatusText) return;
       cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span> 检测中...';
 
+      const keyInput = document.getElementById('cloud-sync-key-input');
+      if (keyInput && typeof getSyncKey === 'function') {
+        keyInput.value = getSyncKey();
+      }
+
       const isAutoEnabled = typeof SettingsService !== 'undefined' ? (SettingsService.getSettings().autoCloudSync !== false) : true;
       if (autoCloudSyncToggle) autoCloudSyncToggle.checked = isAutoEnabled;
       
@@ -5165,6 +5181,40 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       }
     }
 
+    // 切换专属同步 Key
+    document.getElementById('cloud-sync-key-save-btn')?.addEventListener('click', () => {
+      const input = document.getElementById('cloud-sync-key-input');
+      if (input && typeof setSyncKey === 'function') {
+        const val = input.value.trim();
+        if (val) {
+          const appliedKey = setSyncKey(val);
+          input.value = appliedKey;
+          const settingsKeyEl = document.getElementById('settings-sync-key');
+          if (settingsKeyEl) settingsKeyEl.textContent = appliedKey;
+          showToast(`已切换专属同步 Key 为 "${appliedKey}" 🔑，正在对齐多端...`, '☁️');
+          checkAndUpdateCloudStatus();
+          if (typeof SupabaseService !== 'undefined') {
+            SupabaseService.autoSyncOnAppStart((info) => {
+              if (info.mergedCount > 0 || info.statsUpdated) {
+                DataService.getWords().then(words => {
+                  allVocabulary = words;
+                  const limit = currentSettings.dailyNewLimit || 20;
+                  const band = currentSettings.studyBand || 'all';
+                  practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
+                  renderCurrentWord();
+                  updateProgress();
+                  renderLibraryView();
+                  renderStatsOverview();
+                  updateHeaderStreak();
+                  checkAndNotifyAchievements();
+                }).catch(() => {});
+              }
+            });
+          }
+        }
+      }
+    });
+
     // 监听云端实时自动同步事件流
     if (typeof SupabaseService !== 'undefined' && SupabaseService.addSyncListener) {
       SupabaseService.addSyncListener((state) => {
@@ -5193,7 +5243,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       checkAndUpdateCloudStatus();
     });
 
-    // 页面初始化时后台静默检测连接状态并开启全自动静默同步
+    // 页面初始化时后台静默检测连接状态并开启全自动静默同步 (多端实时秒级对齐)
     setTimeout(() => {
       checkAndUpdateCloudStatus();
       if (typeof SupabaseService !== 'undefined') {
@@ -5203,6 +5253,24 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
             checkAndUpdateCloudStatus();
           } else if (info.action === 'synced') {
             checkAndUpdateCloudStatus();
+            // 若从云端合并了新词条进度或打卡统计（如在手机或另一台电脑背过），立刻刷新界面
+            if (info.mergedCount > 0 || info.statsUpdated) {
+              DataService.getWords().then(words => {
+                allVocabulary = words;
+                const limit = currentSettings.dailyNewLimit || 20;
+                const band = currentSettings.studyBand || 'all';
+                practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
+                renderCurrentWord();
+                updateProgress();
+                renderLibraryView();
+                renderStatsOverview();
+                updateHeaderStreak();
+                checkAndNotifyAchievements();
+                if (info.mergedCount > 0) {
+                  showToast(`☁️ 已自动从云端对齐最新进度（同步 ${info.mergedCount} 词）`, '✨');
+                }
+              }).catch(() => {});
+            }
           }
         });
       }
@@ -5236,7 +5304,7 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         });
 
         HapticService.celebrate();
-        showToast(`云端同步成功！已备份 ${result.total} 个词汇与学习数据`, '☁️');
+        showToast(`云端同步成功！已将全部 ${result.total} 词与打卡数据同步至个人主库`, '☁️');
         await checkAndUpdateCloudStatus();
       } catch (err) {
         console.error('云端推送失败:', err);
@@ -5270,7 +5338,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         } else {
           // 重新读取词汇
           allVocabulary = await DataService.getWords();
-          practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+          const limit = currentSettings.dailyNewLimit || 20;
+          const band = currentSettings.studyBand || 'all';
+          practiceQueue = SRSService.generateTodayTasks(allVocabulary, limit, band);
           initialDueCount = practiceQueue.length;
           completedTodayCount = 0;
           isFreePracticeMode = false;
@@ -5285,10 +5355,11 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
           updateProgress();
           renderLibraryView();
           renderStatsOverview();
+          updateHeaderStreak();
           checkAndNotifyAchievements();
 
           HapticService.success();
-          showToast(`已成功同步云端数据！本地现收录 ${allVocabulary.length} 词`, '📥');
+          showToast(`已成功同步云端全量数据！本地现收录 ${allVocabulary.length} 词`, '📥');
         }
         await checkAndUpdateCloudStatus();
       } catch (err) {

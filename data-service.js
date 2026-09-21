@@ -11,11 +11,38 @@
 const OLD_STORAGE_KEY = 'bubei_vocabulary_v1';
 const STORAGE_KEY = 'bubei_academic_vocab_v2';
 const DEVICE_ID_KEY = 'bubei_device_user_id';
+const SYNC_KEY_STORAGE = 'bubei_sync_key_v1';
+const DEFAULT_SYNC_KEY = 'xiaochewx';
 const SETTINGS_KEY = 'bubei_user_settings_v1';
 const VOCAB_VERSION_KEY = 'bubei_vocab_schema_v2';
 
 /**
- * 获取或初始化当前设备的唯一匿名 ID，确保云端同步不会与其他设备/用户冲突
+ * 获取当前用户绑定的专属云端同步密钥（默认: xiaochewx，多端统一）
+ */
+function getSyncKey() {
+  try {
+    const key = localStorage.getItem(SYNC_KEY_STORAGE);
+    return (key && key.trim()) ? key.trim() : DEFAULT_SYNC_KEY;
+  } catch (e) {
+    return DEFAULT_SYNC_KEY;
+  }
+}
+
+/**
+ * 设置/更换专属云端同步密钥
+ */
+function setSyncKey(key) {
+  try {
+    const clean = (key && key.trim()) ? key.trim() : DEFAULT_SYNC_KEY;
+    localStorage.setItem(SYNC_KEY_STORAGE, clean);
+    return clean;
+  } catch (e) {
+    return DEFAULT_SYNC_KEY;
+  }
+}
+
+/**
+ * 获取或初始化当前设备的唯一匿名 ID
  */
 function getDeviceId() {
   let id = null;
@@ -150,6 +177,9 @@ const SupabaseService = {
       }
 
       this.connectionState = 'connected';
+      if (this._syncQueue.size > 0) {
+        this.flushWordQueue();
+      }
       return { ok: true, state: 'connected', cloudCount: count || 0, message: '云端数据库连接正常' };
     } catch (err) {
       this.connectionState = 'error';
@@ -163,8 +193,8 @@ const SupabaseService = {
   queueWord(word) {
     if (!word || !word.id) return;
     if (!this.isAutoSyncEnabled()) return;
-    if (this.connectionState !== 'connected') return;
 
+    // 始终存入待同步队列（即便离线或正在连接中也不会丢词）
     this._syncQueue.set(word.id, word);
     this._notifySyncState({ status: 'pending', count: this._syncQueue.size });
 
@@ -176,7 +206,7 @@ const SupabaseService = {
   },
 
   /**
-   * 立即刷新并批量同步缓冲队列中的所有单词
+   * 立即刷新并批量同步缓冲队列中的所有单词至云端
    */
   async flushWordQueue() {
     if (this._syncQueue.size === 0) return;
@@ -190,10 +220,10 @@ const SupabaseService = {
     this._notifySyncState({ status: 'syncing', count: words.length });
 
     try {
-      const deviceId = getDeviceId();
+      const syncKey = getSyncKey();
       const payload = words.map(w => ({
-        id: `${deviceId}_${w.id}`,
-        device_id: deviceId,
+        id: w.id,
+        device_id: syncKey,
         word_id: w.id,
         word: w.word,
         phonetic: w.phonetic || '',
@@ -213,11 +243,18 @@ const SupabaseService = {
         lastModifiedAt: w.lastModifiedAt || Date.now()
       }));
 
-      await client.from('words').upsert(payload, { onConflict: 'id' });
+      const { error } = await client.from('words').upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
       this.lastSyncedAt = Date.now();
       this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: words.length });
     } catch (e) {
-      console.warn('[SupabaseService] 批量自动同步静默捕获:', e);
+      console.warn('[SupabaseService] 批量自动同步异常:', e);
+      // 网络或接口异常时，将单词放回待同步队列，确保零丢词
+      for (const w of words) {
+        if (!this._syncQueue.has(w.id)) {
+          this._syncQueue.set(w.id, w);
+        }
+      }
       this._notifySyncState({ status: 'error', error: e });
     } finally {
       this.isSyncing = false;
@@ -238,8 +275,7 @@ const SupabaseService = {
     const client = this.getClient();
     if (!client || this.connectionState !== 'connected') return;
     try {
-      const deviceId = getDeviceId();
-      await client.from('words').delete().eq('id', `${deviceId}_${id}`);
+      await client.from('words').delete().eq('id', id);
     } catch (e) {
       console.warn('[SupabaseService] 删除单词同步静默捕获:', e);
     }
@@ -250,8 +286,6 @@ const SupabaseService = {
    */
   queueStats(stats) {
     if (!this.isAutoSyncEnabled()) return;
-    if (this.connectionState !== 'connected') return;
-
     if (this._statsTimer) clearTimeout(this._statsTimer);
     this._statsTimer = setTimeout(() => {
       this._statsTimer = null;
@@ -260,32 +294,55 @@ const SupabaseService = {
   },
 
   /**
-   * 同步统计与打卡数据到云端 (以 deviceId 为主键隔离，杜绝覆盖他人记录)
+   * 同步统计与打卡数据到云端 (绑定专属同步 Key: stats_xiaochewx)
    */
   async syncStats(stats) {
     const client = this.getClient();
     if (!client || this.connectionState !== 'connected') return;
     try {
-      const deviceId = getDeviceId();
+      const syncKey = getSyncKey();
+      const statsId = `stats_${syncKey}`;
+      let cloudStats = null;
+      try {
+        let { data } = await client.from('study_stats').select('*').eq('id', statsId).maybeSingle();
+        if (!data) {
+          const { data: fallback } = await client.from('study_stats').select('*').eq('id', 'stats_main').maybeSingle();
+          data = fallback;
+        }
+        cloudStats = data;
+      } catch (err) {}
+
+      const localCounts = stats.dailyCounts || {};
+      const cloudCounts = (cloudStats && cloudStats.dailyCounts) || {};
+      const mergedCounts = { ...cloudCounts };
+      for (const [k, v] of Object.entries(localCounts)) {
+        mergedCounts[k] = Math.max(mergedCounts[k] || 0, v || 0);
+      }
+
+      const localCheckIns = stats.checkInDates || [];
+      const cloudCheckIns = (cloudStats && cloudStats.checkInDates) || [];
+      const mergedCheckIns = Array.from(new Set([...localCheckIns, ...cloudCheckIns])).sort();
+      const mergedBestStreak = Math.max(stats.bestStreak || 0, (cloudStats && cloudStats.bestStreak) || 0);
+
       const payload = {
-        id: `stats_${deviceId}`,
-        device_id: deviceId,
-        dailyCounts: stats.dailyCounts || {},
-        checkInDates: stats.checkInDates || [],
-        bestStreak: Number(stats.bestStreak) || 0,
-        lastActiveDate: stats.lastActiveDate || '',
+        id: statsId,
+        device_id: syncKey,
+        dailyCounts: mergedCounts,
+        checkInDates: mergedCheckIns,
+        bestStreak: mergedBestStreak,
+        lastActiveDate: stats.lastActiveDate || (cloudStats && cloudStats.lastActiveDate) || '',
         updatedAt: Date.now()
       };
       await client.from('study_stats').upsert(payload, { onConflict: 'id' });
       this.lastSyncedAt = Date.now();
       this._notifySyncState({ status: 'synced', time: this.lastSyncedAt });
     } catch (e) {
-      console.warn('[SupabaseService] 打卡数据同步静默捕获:', e);
+      console.warn('[SupabaseService] 打卡数据同步异常:', e);
     }
   },
 
   /**
-   * 应用启动时自动静默探测与同步（完全无人值守，无须手动按键）
+   * 应用启动时自动静默探测与智能双向增量同步（手机/电脑秒级对齐，完全无需手动干预）
    */
   async autoSyncOnAppStart(onAutoSynced) {
     if (!this.isAutoSyncEnabled()) return;
@@ -293,60 +350,193 @@ const SupabaseService = {
     if (!res.ok) return;
 
     try {
-      const localWords = await DataService.getWords();
-      const stats = typeof StatsService !== 'undefined' ? StatsService.getStats() : null;
+      this.isSyncing = true;
+      this._notifySyncState({ status: 'syncing' });
 
-      // 若云端尚无词汇记录，而本地已有词库，则后台自动执行首次完整同步
-      if (res.cloudCount === 0 && localWords && localWords.length > 0) {
-        console.log('[SupabaseService] 首次检测到云端为空，自动静默上传完整词库与进度...');
-        this.isSyncing = true;
-        this._notifySyncState({ status: 'syncing', count: localWords.length });
-        await this.pushAllToCloud();
-        this.lastSyncedAt = Date.now();
-        this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: localWords.length });
-        if (typeof onAutoSynced === 'function') {
-          onAutoSynced({ action: 'initial_push', total: localWords.length });
+      // 1. 同步并双向合并打卡统计 (绑定专属同步 Key: stats_xiaochewx)
+      let statsUpdated = false;
+      try {
+        const syncKey = getSyncKey();
+        const statsId = `stats_${syncKey}`;
+        let { data: cloudStats } = await this.getClient()
+          .from('study_stats')
+          .select('*')
+          .eq('id', statsId)
+          .maybeSingle();
+
+        if (!cloudStats) {
+          const { data: fallback } = await this.getClient()
+            .from('study_stats')
+            .select('*')
+            .eq('id', 'stats_main')
+            .maybeSingle();
+          cloudStats = fallback;
         }
-      } else if (res.cloudCount > 0) {
-        // 云端已有记录，自动静默同步最新打卡记录
-        if (stats) {
-          await this.syncStats(stats);
+
+        if (cloudStats && typeof StatsService !== 'undefined') {
+          const localStats = StatsService.getStats();
+          const localCounts = localStats.dailyCounts || {};
+          const cloudCounts = cloudStats.dailyCounts || {};
+          const mergedCounts = { ...cloudCounts };
+          for (const [k, v] of Object.entries(localCounts)) {
+            mergedCounts[k] = Math.max(mergedCounts[k] || 0, v || 0);
+          }
+          const mergedCheckIns = Array.from(new Set([...(localStats.checkInDates || []), ...(cloudStats.checkInDates || [])])).sort();
+          const mergedStreak = Math.max(localStats.bestStreak || 0, cloudStats.bestStreak || 0);
+
+          const newStats = {
+            dailyCounts: mergedCounts,
+            checkInDates: mergedCheckIns,
+            bestStreak: mergedStreak,
+            lastActiveDate: cloudStats.lastActiveDate || localStats.lastActiveDate
+          };
+          StatsService.saveStats(newStats);
+          statsUpdated = true;
         }
+      } catch (e) {
+        console.warn('[SupabaseService] 启动打卡合并异常:', e);
+      }
+
+      // 2. 检查云端词库：若云端记录不足（< 1000 词），说明是全新项目，执行全量初次上传
+      if (res.cloudCount < 1000) {
+        const localWords = await DataService.getWords();
+        if (localWords && localWords.length > 0) {
+          console.log('[SupabaseService] 首次检测到云端词库不全，自动执行全量初始化上传...');
+          await this.pushAllToCloud();
+          this.lastSyncedAt = Date.now();
+          this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: localWords.length });
+          if (typeof onAutoSynced === 'function') {
+            onAutoSynced({ action: 'initial_push', total: localWords.length });
+          }
+        }
+      } else {
+        // 3. 云端已就绪：拉取所有在云端有学习记录/星标收藏/笔记的单词，与本地无缝合并对齐！
+        const client = this.getClient();
+        const { data: cloudLearned, error } = await client
+          .from('words')
+          .select('*')
+          .or('status.neq.new,isStarred.eq.true,userNotes.neq.');
+
+        let mergedCount = 0;
+        if (!error && Array.isArray(cloudLearned) && cloudLearned.length > 0) {
+          const localWords = await DataService.getWords();
+          const localMap = new Map(localWords.map(w => [w.id, w]));
+          let localNeedsSave = false;
+
+          for (const cw of cloudLearned) {
+            const cleanId = cw.word_id || cw.id;
+            const lw = localMap.get(cleanId);
+            if (lw) {
+              const cloudReview = Number(cw.reviewCount) || 0;
+              const localReview = Number(lw.reviewCount) || 0;
+              const cloudMod = Number(cw.lastModifiedAt) || 0;
+              const localMod = Number(lw.lastModifiedAt) || 0;
+
+              let changed = false;
+              if (cloudReview > localReview || (cloudReview === localReview && cloudMod > localMod)) {
+                lw.status = cw.status || lw.status;
+                lw.reviewCount = cloudReview;
+                lw.interval = Number(cw.interval) || lw.interval;
+                lw.nextReviewDate = Number(cw.nextReviewDate) || lw.nextReviewDate;
+                lw.lastReviewedAt = cw.lastReviewedAt || lw.lastReviewedAt;
+                changed = true;
+              }
+              if (cw.isStarred && !lw.isStarred) {
+                lw.isStarred = true;
+                changed = true;
+              }
+              if (cw.userNotes && cw.userNotes !== lw.userNotes && cloudMod >= localMod) {
+                lw.userNotes = cw.userNotes;
+                changed = true;
+              }
+              if (changed) {
+                localNeedsSave = true;
+                mergedCount++;
+              }
+            } else {
+              // 云端有本地没有的自定义词
+              localWords.push({
+                id: cw.id,
+                word: cw.word,
+                phonetic: cw.phonetic || '',
+                partOfSpeech: cw.partOfSpeech || 'n.',
+                definition: cw.definition || '',
+                exampleEn: cw.exampleEn || '',
+                exampleCn: cw.exampleCn || '',
+                tags: Array.isArray(cw.tags) ? cw.tags : [],
+                status: cw.status || 'new',
+                reviewCount: Number(cw.reviewCount) || 0,
+                interval: Number(cw.interval) || 0,
+                nextReviewDate: Number(cw.nextReviewDate) || Date.now(),
+                lastReviewedAt: cw.lastReviewedAt || null,
+                userNotes: cw.userNotes || '',
+                isStarred: !!cw.isStarred,
+                createdAt: cw.createdAt || Date.now(),
+                lastModifiedAt: cw.lastModifiedAt || Date.now()
+              });
+              localNeedsSave = true;
+              mergedCount++;
+            }
+          }
+
+          if (localNeedsSave) {
+            await DataService._persistWords(localWords);
+          }
+
+          // 反向补齐：若本地存在已背、已收藏或写了笔记的词尚未进入云端，自动排入队列静默推送
+          for (const lw of localWords) {
+            if (lw.status !== 'new' || lw.isStarred || lw.userNotes) {
+              const cloudMatch = cloudLearned.find(c => (c.word_id || c.id) === lw.id);
+              if (!cloudMatch || (Number(lw.reviewCount) || 0) > (Number(cloudMatch.reviewCount) || 0)) {
+                this.queueWord(lw);
+              }
+            }
+          }
+        }
+
+        // 刷新待同步队列
+        if (this._syncQueue.size > 0) {
+          await this.flushWordQueue();
+        }
+
         this.lastSyncedAt = Date.now();
+        this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: mergedCount });
+
         if (typeof onAutoSynced === 'function') {
-          onAutoSynced({ action: 'synced', total: res.cloudCount });
+          onAutoSynced({ action: 'synced', mergedCount, total: res.cloudCount, statsUpdated });
         }
       }
     } catch (e) {
       console.warn('[SupabaseService] 启动自动同步静默异常:', e);
+      this._notifySyncState({ status: 'error', error: e });
     } finally {
       this.isSyncing = false;
     }
   },
 
   /**
-   * 分批全量推送本地数据到云端 (使用独立 device_id 隔离)
+   * 分批全量推送本地数据到云端
    * @param {(progress: { percent: number, current: number, total: number }) => void} [onProgress]
    */
   async pushAllToCloud(onProgress) {
     const client = this.getClient();
     if (!client) throw new Error('Supabase 客户端尚未初始化');
 
-    const deviceId = getDeviceId();
+    const syncKey = getSyncKey();
     const words = await DataService.getWords();
     const stats = StatsService.getStats();
 
-    // 1. 同步当前设备的打卡记录
+    // 1. 同步打卡记录至 stats_${syncKey}
     await this.syncStats(stats);
 
-    // 2. 分批次同步当前设备词汇
+    // 2. 分批次同步全部词汇
     const batchSize = 200;
     const total = words.length;
 
     for (let i = 0; i < total; i += batchSize) {
       const batch = words.slice(i, i + batchSize).map(w => ({
-        id: `${deviceId}_${w.id}`,
-        device_id: deviceId,
+        id: w.id,
+        device_id: syncKey,
         word_id: w.id,
         word: w.word,
         phonetic: w.phonetic || '',
@@ -379,30 +569,40 @@ const SupabaseService = {
       }
     }
 
+    this.lastSyncedAt = Date.now();
     return { total };
   },
 
   /**
-   * 从云端拉取当前设备的数据并合并到本地
+   * 从云端全量拉取数据并智能合并到本地
    */
   async pullAllFromCloud() {
     const client = this.getClient();
     if (!client) throw new Error('Supabase 客户端尚未初始化');
 
-    const deviceId = getDeviceId();
+    const syncKey = getSyncKey();
+    const statsId = `stats_${syncKey}`;
 
     // 1. 拉取打卡记录
     try {
-      const { data: statsData } = await client
+      let { data: statsData } = await client
         .from('study_stats')
         .select('*')
-        .eq('id', `stats_${deviceId}`)
+        .eq('id', statsId)
         .maybeSingle();
+
+      if (!statsData) {
+        const { data: fallback } = await client.from('study_stats').select('*').eq('id', 'stats_main').maybeSingle();
+        statsData = fallback;
+      }
 
       if (statsData) {
         const localStats = StatsService.getStats();
         const mergedCheckIns = Array.from(new Set([...(localStats.checkInDates || []), ...(statsData.checkInDates || [])])).sort();
-        const mergedCounts = { ...(localStats.dailyCounts || {}), ...(statsData.dailyCounts || {}) };
+        const mergedCounts = { ...(statsData.dailyCounts || {}), ...(localStats.dailyCounts || {}) };
+        for (const [k, v] of Object.entries(statsData.dailyCounts || {})) {
+          mergedCounts[k] = Math.max(mergedCounts[k] || 0, v || 0);
+        }
         const mergedStreak = Math.max(localStats.bestStreak || 0, statsData.bestStreak || 0);
         const newStats = {
           dailyCounts: mergedCounts,
@@ -416,7 +616,7 @@ const SupabaseService = {
       console.warn('[SupabaseService] 拉取打卡记录警告:', e);
     }
 
-    // 2. 分页拉取云端词库
+    // 2. 分页拉取云端词库全部词汇
     let allCloudWords = [];
     let from = 0;
     const step = 1000;
@@ -425,7 +625,6 @@ const SupabaseService = {
       const { data, error } = await client
         .from('words')
         .select('*')
-        .eq('device_id', deviceId)
         .range(from, from + step - 1);
 
       if (error) throw error;
@@ -441,7 +640,7 @@ const SupabaseService = {
 
     // 标准化数据格式并安全合并至本地
     const normalized = allCloudWords.map(item => ({
-      id: item.word_id || (item.id && item.id.includes('_') ? item.id.split('_').slice(1).join('_') : item.id),
+      id: item.word_id || item.id,
       word: item.word,
       phonetic: item.phonetic || '',
       partOfSpeech: item.partOfSpeech || item.part_of_speech || 'n.',
@@ -456,10 +655,12 @@ const SupabaseService = {
       lastReviewedAt: item.lastReviewedAt || item.last_reviewed_at || null,
       userNotes: item.userNotes || item.user_notes || '',
       isStarred: !!(item.isStarred || item.is_starred),
-      createdAt: item.createdAt || item.created_at || Date.now()
+      createdAt: Number(item.createdAt) || Date.now(),
+      lastModifiedAt: Number(item.lastModifiedAt) || Date.now()
     }));
 
     const result = await DataService.importBackup(normalized, 'merge');
+    this.lastSyncedAt = Date.now();
     return {
       total: allCloudWords.length,
       added: result.added,
@@ -621,6 +822,19 @@ const DataService = {
             needsSave = true;
           }
         });
+
+        // 自动自愈补齐：确保系统核心词库完整无遗漏 (如自动补入缺失的 word_3001)
+        if (typeof INITIAL_VOCABULARY !== 'undefined' && Array.isArray(INITIAL_VOCABULARY)) {
+          const idSet = new Set(idbList.map(w => w.id));
+          for (const seed of INITIAL_VOCABULARY) {
+            if (!idSet.has(seed.id)) {
+              idbList.push({ ...seed });
+              idSet.add(seed.id);
+              needsSave = true;
+            }
+          }
+        }
+
         if (needsSave) {
           await IdbStorage.saveAllWords(idbList);
         }
@@ -1755,6 +1969,8 @@ if (typeof window !== 'undefined') {
   window.SUPABASE_CONFIG = SUPABASE_CONFIG;
   window.SettingsService = SettingsService;
   window.getDeviceId = getDeviceId;
+  window.getSyncKey = getSyncKey;
+  window.setSyncKey = setSyncKey;
 
   // 页面隐藏或离焦时自动强制提交任何未上传的单词变更
   window.addEventListener('visibilitychange', () => {
@@ -1769,5 +1985,5 @@ if (typeof window !== 'undefined') {
   });
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG, SettingsService, getDeviceId };
+  module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG, SettingsService, getDeviceId, getSyncKey, setSyncKey };
 }
