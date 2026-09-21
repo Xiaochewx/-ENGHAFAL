@@ -1524,6 +1524,22 @@
         </div>
       </div>
 
+      <!-- 自动静默同步设置选项 (无需手动按键) -->
+      <div class="my-3 p-3.5 rounded-2xl bg-gold-50/50 dark:bg-gold-950/25 border border-gold-200/60 dark:border-gold-800/40 flex items-center justify-between">
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-zinc-800 dark:text-zinc-100">自动云端同步</span>
+            <span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold rounded-full">无需手动</span>
+          </div>
+          <span class="text-[11px] text-zinc-500 dark:text-zinc-400 block">背词、标星、笔记与打卡自动实时静默同步</span>
+          <span id="cloud-last-sync-text" class="text-[10px] text-zinc-400 dark:text-zinc-500 block font-mono">上次同步: 尚未同步</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer ml-3 flex-shrink-0">
+          <input type="checkbox" id="auto-cloud-sync-toggle" class="sr-only peer" checked>
+          <div class="w-10 h-5 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gold-500"></div>
+        </label>
+      </div>
+
       <!-- 操作按键区 -->
       <div class="space-y-2.5 my-4">
         <button id="cloud-push-btn" type="button" 
@@ -1708,6 +1724,16 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
               <span id="settings-device-id" class="font-mono text-[10px] font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-200/70 dark:bg-zinc-700/60 px-1.5 py-0.5 rounded">...</span>
               <button id="settings-copy-device-id-btn" type="button" class="text-[10px] text-gold-600 hover:text-gold-500 font-bold px-1 py-0.5">复制</button>
             </div>
+          </div>
+          <div class="flex items-center justify-between pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
+            <div>
+              <span class="text-zinc-700 dark:text-zinc-200 font-medium block">自动云端实时同步</span>
+              <span class="text-[10px] text-zinc-400 block">背词与打卡自动同步至 Supabase</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="settings-auto-cloud-sync" class="sr-only peer" checked>
+              <div class="w-9 h-5 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gold-500"></div>
+            </label>
           </div>
         </div>
 
@@ -4711,6 +4737,9 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         const autoPronounceEl = document.getElementById('settings-auto-pronounce');
         if (autoPronounceEl) autoPronounceEl.checked = !!settings.autoPronounce;
 
+        const autoCloudSyncEl = document.getElementById('settings-auto-cloud-sync');
+        if (autoCloudSyncEl) autoCloudSyncEl.checked = settings.autoCloudSync !== false;
+
         const deviceIdEl = document.getElementById('settings-device-id');
         if (deviceIdEl && typeof getDeviceId === 'function') {
           const devId = getDeviceId();
@@ -4872,6 +4901,18 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         SettingsService.updateSettings({ autoPronounce: checked });
       }
       showToast(checked ? '已开启卡片自动朗读 🔊' : '已关闭自动朗读', '💡');
+    });
+
+    // 自动云端实时同步开关 (设置面板)
+    document.getElementById('settings-auto-cloud-sync')?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ autoCloudSync: checked });
+      }
+      const cloudToggle = document.getElementById('auto-cloud-sync-toggle');
+      if (cloudToggle) cloudToggle.checked = checked;
+      showToast(checked ? '已开启云端自动实时同步 ☁️' : '已暂停自动同步', '💡');
+      checkAndUpdateCloudStatus();
     });
 
     // 复制设备同步码
@@ -5086,32 +5127,86 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
       if (e.target === cloudModal) closeCloudModal();
     });
 
+    const autoCloudSyncToggle = document.getElementById('auto-cloud-sync-toggle');
+    const cloudLastSyncText = document.getElementById('cloud-last-sync-text');
+
     // 状态检测与 UI 刷新
     async function checkAndUpdateCloudStatus() {
       if (!cloudStatusText) return;
       cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span> 检测中...';
+
+      const isAutoEnabled = typeof SettingsService !== 'undefined' ? (SettingsService.getSettings().autoCloudSync !== false) : true;
+      if (autoCloudSyncToggle) autoCloudSyncToggle.checked = isAutoEnabled;
       
       const res = await SupabaseService.checkConnection();
       if (res.ok) {
         if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
-        cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">已连接，同步正常</span>';
+        if (cloudSyncBtn) cloudSyncBtn.title = isAutoEnabled ? 'Supabase 云端已连接 · 自动实时同步中' : 'Supabase 云端已连接 · 自动同步已暂停';
+        cloudStatusText.innerHTML = isAutoEnabled 
+          ? '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">已连接 · 自动实时同步中</span>'
+          : '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">已连接 (自动同步已暂停)</span>';
         if (cloudCountRow) {
           cloudCountRow.classList.remove('hidden');
           cloudWordsCount.textContent = `${res.cloudCount} 词`;
         }
+        if (cloudLastSyncText && SupabaseService.lastSyncedAt) {
+          cloudLastSyncText.textContent = `上次同步: ${new Date(SupabaseService.lastSyncedAt).toLocaleTimeString()}`;
+        }
       } else if (res.state === 'table_missing') {
         if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+        if (cloudSyncBtn) cloudSyncBtn.title = 'Supabase 待执行 SQL 建表';
         cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span class="text-amber-600 dark:text-amber-400 font-bold">待执行 SQL 建表</span>';
         if (cloudCountRow) cloudCountRow.classList.add('hidden');
       } else {
         if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+        if (cloudSyncBtn) cloudSyncBtn.title = 'Supabase 连接失败';
         cloudStatusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span class="text-rose-500 font-bold">${escapeHtml(res.message || '连接失败')}</span>`;
         if (cloudCountRow) cloudCountRow.classList.add('hidden');
       }
     }
 
-    // 页面初始化时后台静默检测连接状态
-    setTimeout(checkAndUpdateCloudStatus, 800);
+    // 监听云端实时自动同步事件流
+    if (typeof SupabaseService !== 'undefined' && SupabaseService.addSyncListener) {
+      SupabaseService.addSyncListener((state) => {
+        if (state.status === 'syncing') {
+          if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-gold-500 animate-ping ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+          if (cloudSyncBtn) cloudSyncBtn.title = '正在自动同步至云端...';
+        } else if (state.status === 'synced') {
+          if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+          if (cloudSyncBtn) cloudSyncBtn.title = 'Supabase 云端已连接 · 自动实时同步中';
+          if (cloudLastSyncText) {
+            cloudLastSyncText.textContent = `上次同步: ${new Date(state.time || Date.now()).toLocaleTimeString()}`;
+          }
+        }
+      });
+    }
+
+    // 自动同步开关切换 (云端弹窗)
+    autoCloudSyncToggle?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      if (typeof SettingsService !== 'undefined') {
+        SettingsService.updateSettings({ autoCloudSync: checked });
+      }
+      const settingsToggle = document.getElementById('settings-auto-cloud-sync');
+      if (settingsToggle) settingsToggle.checked = checked;
+      showToast(checked ? '已开启自动云端同步 ☁️' : '已暂停自动同步', '💡');
+      checkAndUpdateCloudStatus();
+    });
+
+    // 页面初始化时后台静默检测连接状态并开启全自动静默同步
+    setTimeout(() => {
+      checkAndUpdateCloudStatus();
+      if (typeof SupabaseService !== 'undefined') {
+        SupabaseService.autoSyncOnAppStart((info) => {
+          if (info.action === 'initial_push') {
+            showToast(`☁️ 云端已自动连接，首次已将 ${info.total} 词及打卡数据自动备份至云端！`, '☁️');
+            checkAndUpdateCloudStatus();
+          } else if (info.action === 'synced') {
+            checkAndUpdateCloudStatus();
+          }
+        });
+      }
+    }, 800);
 
     // 一键复制 SQL 建表语句
     copySqlBtn?.addEventListener('click', () => {

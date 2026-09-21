@@ -41,7 +41,8 @@ const DEFAULT_SETTINGS = {
   studyBand: 'all',      // 'all' | 'band4-5' | 'band6-7' | 'band8-9' | 'starred'
   accent: 'us',          // 'us' (美音) | 'uk' (英音)
   autoPronounce: false,  // 切词自动发音
-  hapticEnabled: true    // 触觉震动反馈
+  hapticEnabled: true,   // 触觉震动反馈
+  autoCloudSync: true    // 自动云端同步（背词、笔记与打卡实时静默同步至 Supabase）
 };
 
 const SettingsService = {
@@ -81,6 +82,34 @@ const SupabaseService = {
   client: null,
   isInitialized: false,
   connectionState: 'idle', // 'idle' | 'connected' | 'table_missing' | 'error'
+  _syncQueue: new Map(),
+  _syncTimer: null,
+  _statsTimer: null,
+  _syncListeners: new Set(),
+  isSyncing: false,
+  lastSyncedAt: null,
+
+  addSyncListener(cb) {
+    if (typeof cb === 'function') this._syncListeners.add(cb);
+  },
+
+  removeSyncListener(cb) {
+    this._syncListeners.delete(cb);
+  },
+
+  _notifySyncState(state) {
+    for (const cb of this._syncListeners) {
+      try { cb(state); } catch (e) {}
+    }
+  },
+
+  isAutoSyncEnabled() {
+    if (typeof SettingsService !== 'undefined') {
+      const s = SettingsService.getSettings();
+      return s.autoCloudSync !== false;
+    }
+    return true;
+  },
 
   getClient() {
     if (this.client) return this.client;
@@ -129,38 +158,77 @@ const SupabaseService = {
   },
 
   /**
-   * 同步单个单词到云端（带 device_id 隔离，异步静默执行，不阻塞本地）
+   * 自动同步缓冲队列：防抖聚合批量推送，彻底消除频繁点击时的网络风暴与卡顿
    */
-  async syncWord(word) {
+  queueWord(word) {
+    if (!word || !word.id) return;
+    if (!this.isAutoSyncEnabled()) return;
+    if (this.connectionState !== 'connected') return;
+
+    this._syncQueue.set(word.id, word);
+    this._notifySyncState({ status: 'pending', count: this._syncQueue.size });
+
+    if (this._syncTimer) clearTimeout(this._syncTimer);
+    this._syncTimer = setTimeout(() => {
+      this._syncTimer = null;
+      this.flushWordQueue();
+    }, 2000);
+  },
+
+  /**
+   * 立即刷新并批量同步缓冲队列中的所有单词
+   */
+  async flushWordQueue() {
+    if (this._syncQueue.size === 0) return;
     const client = this.getClient();
     if (!client || this.connectionState !== 'connected') return;
+
+    const words = Array.from(this._syncQueue.values());
+    this._syncQueue.clear();
+
+    this.isSyncing = true;
+    this._notifySyncState({ status: 'syncing', count: words.length });
+
     try {
       const deviceId = getDeviceId();
-      const payload = {
-        id: `${deviceId}_${word.id}`,
+      const payload = words.map(w => ({
+        id: `${deviceId}_${w.id}`,
         device_id: deviceId,
-        word_id: word.id,
-        word: word.word,
-        phonetic: word.phonetic || '',
-        partOfSpeech: word.partOfSpeech || 'n.',
-        definition: word.definition || '',
-        exampleEn: word.exampleEn || '',
-        exampleCn: word.exampleCn || '',
-        tags: Array.isArray(word.tags) ? word.tags : [],
-        status: word.status || 'new',
-        reviewCount: Number(word.reviewCount) || 0,
-        interval: Number(word.interval) || 0,
-        nextReviewDate: Number(word.nextReviewDate) || Date.now(),
-        lastReviewedAt: word.lastReviewedAt || null,
-        userNotes: word.userNotes || '',
-        isStarred: !!word.isStarred,
-        createdAt: word.createdAt || Date.now(),
-        lastModifiedAt: word.lastModifiedAt || Date.now()
-      };
+        word_id: w.id,
+        word: w.word,
+        phonetic: w.phonetic || '',
+        partOfSpeech: w.partOfSpeech || 'n.',
+        definition: w.definition || '',
+        exampleEn: w.exampleEn || '',
+        exampleCn: w.exampleCn || '',
+        tags: Array.isArray(w.tags) ? w.tags : [],
+        status: w.status || 'new',
+        reviewCount: Number(w.reviewCount) || 0,
+        interval: Number(w.interval) || 0,
+        nextReviewDate: Number(w.nextReviewDate) || Date.now(),
+        lastReviewedAt: w.lastReviewedAt || null,
+        userNotes: w.userNotes || '',
+        isStarred: !!w.isStarred,
+        createdAt: w.createdAt || Date.now(),
+        lastModifiedAt: w.lastModifiedAt || Date.now()
+      }));
+
       await client.from('words').upsert(payload, { onConflict: 'id' });
+      this.lastSyncedAt = Date.now();
+      this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: words.length });
     } catch (e) {
-      console.warn('[SupabaseService] 单词同步静默捕获:', e);
+      console.warn('[SupabaseService] 批量自动同步静默捕获:', e);
+      this._notifySyncState({ status: 'error', error: e });
+    } finally {
+      this.isSyncing = false;
     }
+  },
+
+  /**
+   * 同步单个单词到云端（自动路由至聚合缓冲队列，零网络阻塞）
+   */
+  async syncWord(word) {
+    this.queueWord(word);
   },
 
   /**
@@ -175,6 +243,20 @@ const SupabaseService = {
     } catch (e) {
       console.warn('[SupabaseService] 删除单词同步静默捕获:', e);
     }
+  },
+
+  /**
+   * 将打卡统计放入防抖同步队列
+   */
+  queueStats(stats) {
+    if (!this.isAutoSyncEnabled()) return;
+    if (this.connectionState !== 'connected') return;
+
+    if (this._statsTimer) clearTimeout(this._statsTimer);
+    this._statsTimer = setTimeout(() => {
+      this._statsTimer = null;
+      this.syncStats(stats);
+    }, 2500);
   },
 
   /**
@@ -195,8 +277,50 @@ const SupabaseService = {
         updatedAt: Date.now()
       };
       await client.from('study_stats').upsert(payload, { onConflict: 'id' });
+      this.lastSyncedAt = Date.now();
+      this._notifySyncState({ status: 'synced', time: this.lastSyncedAt });
     } catch (e) {
       console.warn('[SupabaseService] 打卡数据同步静默捕获:', e);
+    }
+  },
+
+  /**
+   * 应用启动时自动静默探测与同步（完全无人值守，无须手动按键）
+   */
+  async autoSyncOnAppStart(onAutoSynced) {
+    if (!this.isAutoSyncEnabled()) return;
+    const res = await this.checkConnection();
+    if (!res.ok) return;
+
+    try {
+      const localWords = await DataService.getWords();
+      const stats = typeof StatsService !== 'undefined' ? StatsService.getStats() : null;
+
+      // 若云端尚无词汇记录，而本地已有词库，则后台自动执行首次完整同步
+      if (res.cloudCount === 0 && localWords && localWords.length > 0) {
+        console.log('[SupabaseService] 首次检测到云端为空，自动静默上传完整词库与进度...');
+        this.isSyncing = true;
+        this._notifySyncState({ status: 'syncing', count: localWords.length });
+        await this.pushAllToCloud();
+        this.lastSyncedAt = Date.now();
+        this._notifySyncState({ status: 'synced', time: this.lastSyncedAt, count: localWords.length });
+        if (typeof onAutoSynced === 'function') {
+          onAutoSynced({ action: 'initial_push', total: localWords.length });
+        }
+      } else if (res.cloudCount > 0) {
+        // 云端已有记录，自动静默同步最新打卡记录
+        if (stats) {
+          await this.syncStats(stats);
+        }
+        this.lastSyncedAt = Date.now();
+        if (typeof onAutoSynced === 'function') {
+          onAutoSynced({ action: 'synced', total: res.cloudCount });
+        }
+      }
+    } catch (e) {
+      console.warn('[SupabaseService] 启动自动同步静默异常:', e);
+    } finally {
+      this.isSyncing = false;
     }
   },
 
@@ -1631,6 +1755,18 @@ if (typeof window !== 'undefined') {
   window.SUPABASE_CONFIG = SUPABASE_CONFIG;
   window.SettingsService = SettingsService;
   window.getDeviceId = getDeviceId;
+
+  // 页面隐藏或离焦时自动强制提交任何未上传的单词变更
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && typeof SupabaseService !== 'undefined') {
+      SupabaseService.flushWordQueue();
+    }
+  });
+  window.addEventListener('pagehide', () => {
+    if (typeof SupabaseService !== 'undefined') {
+      SupabaseService.flushWordQueue();
+    }
+  });
 }
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG, SettingsService, getDeviceId };
