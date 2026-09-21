@@ -207,6 +207,15 @@
           </svg>
         </button>
 
+        <!-- 云端同步图标 -->
+        <button id="cloud-sync-btn" type="button" aria-label="云端同步" title="Supabase 云端同步状态" 
+                class="relative w-9 h-9 flex items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-gold-600 dark:hover:text-gold-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+          </svg>
+          <span id="cloud-status-dot" class="absolute top-2 right-2 w-2 h-2 rounded-full bg-zinc-400 ring-2 ring-white dark:ring-zinc-900 transition-colors"></span>
+        </button>
+
         <!-- 设置图标 -->
         <button id="settings-btn" type="button" aria-label="偏好设置" 
                 class="w-9 h-9 flex items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-gold-600 dark:hover:text-gold-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors">
@@ -1401,9 +1410,140 @@
       </button>
 
     </div>
+  <!-- ==================== 8. Supabase 云端同步模态弹窗 ==================== -->
+  <div id="cloud-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
+    <div id="cloud-modal-content" class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200/90 dark:border-zinc-800 p-6 transform transition-all duration-300 scale-95 max-h-[90vh] overflow-y-auto text-left">
+      
+      <!-- 弹窗标题与关闭按钮 -->
+      <div class="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-center shadow-sm">
+            <svg class="w-5 h-5 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-zinc-900 dark:text-zinc-50 leading-tight">Supabase 云端数据同步</h3>
+            <p class="text-[11px] text-zinc-400">多设备漫游 · 艾宾浩斯进度云端备份</p>
+          </div>
+        </div>
+        <button id="close-cloud-modal-btn" type="button" aria-label="关闭弹窗" 
+                class="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg class="w-4 h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 云端连接状态卡片 -->
+      <div class="my-4 p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 text-xs space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-zinc-500 dark:text-zinc-400">项目终端:</span>
+          <span class="font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[200px]">abzacuzhggyvlqwwtlyj.supabase.co</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-zinc-500 dark:text-zinc-400">连接状态:</span>
+          <span id="cloud-status-text" class="inline-flex items-center gap-1.5 font-semibold text-zinc-600 dark:text-zinc-300">
+            <span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span> 检测中...
+          </span>
+        </div>
+        <div id="cloud-count-row" class="flex items-center justify-between hidden">
+          <span class="text-zinc-500 dark:text-zinc-400">云端已存词汇:</span>
+          <span id="cloud-words-count" class="font-bold text-gold-600 dark:text-gold-400 font-mono">0 词</span>
+        </div>
+      </div>
+
+      <!-- 同步进度条（默认隐藏） -->
+      <div id="cloud-progress-box" class="my-3 p-3 rounded-2xl bg-gold-50/60 dark:bg-gold-950/30 border border-gold-300/40 hidden">
+        <div class="flex items-center justify-between text-xs font-semibold text-gold-800 dark:text-gold-200 mb-1.5">
+          <span id="cloud-progress-title">正在同步数据到云端...</span>
+          <span id="cloud-progress-percent" class="font-mono">0%</span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-gold-200 dark:bg-gold-900/60 overflow-hidden">
+          <div id="cloud-progress-bar" class="h-full bg-gold-500 rounded-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- 操作按键区 -->
+      <div class="space-y-2.5 my-4">
+        <button id="cloud-push-btn" type="button" 
+                class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-gold-600 to-amber-500 hover:brightness-105 active:scale-98 text-white font-semibold text-xs sm:text-sm shadow-gold-subtle transition-all flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>上传备份本地词库与进度到云端</span>
+        </button>
+
+        <button id="cloud-pull-btn" type="button" 
+                class="w-full py-2.5 px-4 rounded-xl bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-750 active:scale-98 text-zinc-700 dark:text-zinc-200 font-semibold text-xs sm:text-sm border border-zinc-200 dark:border-zinc-700 shadow-xs transition-all flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>从云端拉取最新记录合并到本地</span>
+        </button>
+      </div>
+
+      <!-- SQL 建表辅助指引（带一键复制） -->
+      <div class="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <span>🛠️</span> 数据库建表 SQL (首次使用必读)
+          </span>
+          <button id="copy-sql-btn" type="button" class="text-[11px] font-semibold text-gold-600 dark:text-gold-400 hover:underline flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            <span>一键复制 SQL</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2">
+          如果提示“数据表尚未初始化”，只需复制下方 SQL，粘贴至 Supabase 控制台的 <b>SQL Editor</b> 中点击 <b>Run</b> 即可完成一键建表：
+        </p>
+        <pre class="p-3 rounded-xl bg-zinc-900 text-zinc-300 font-mono text-[10px] leading-relaxed overflow-x-auto max-h-32 border border-zinc-800 select-all" id="sql-code-block"><code>-- 1. 创建单词主表
+create table if not exists public.words (
+  id text primary key,
+  word text not null,
+  phonetic text default '',
+  "partOfSpeech" text default 'n.',
+  definition text default '',
+  "exampleEn" text default '',
+  "exampleCn" text default '',
+  tags jsonb default '[]'::jsonb,
+  status text default 'new',
+  "reviewCount" integer default 0,
+  interval integer default 0,
+  "nextReviewDate" bigint,
+  "lastReviewedAt" bigint,
+  "userNotes" text default '',
+  "createdAt" bigint,
+  "lastModifiedAt" bigint
+);
+
+-- 2. 创建打卡统计表
+create table if not exists public.study_stats (
+  id text primary key default 'global_user_stats',
+  "dailyCounts" jsonb default '{}'::jsonb,
+  "checkInDates" jsonb default '[]'::jsonb,
+  "bestStreak" integer default 0,
+  "lastActiveDate" text,
+  "updatedAt" bigint
+);
+
+-- 3. 开启权限策略
+alter table public.words enable row level security;
+alter table public.study_stats enable row level security;
+create policy "Allow public words" on public.words for all using (true) with check (true);
+create policy "Allow public stats" on public.study_stats for all using (true) with check (true);</code></pre>
+      </div>
+
+    </div>
   </div>
 
-  <!-- 引入初始词库数据与解耦数据层 -->
+  <!-- 引入 Supabase JS SDK、初始词库数据与解耦数据层 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="words.js"></script>
   <script src="data-service.js"></script>
 
@@ -3922,6 +4062,166 @@
       } catch (err) {
         console.error('导入恢复异常:', err);
         showToast('导入失败：' + (err.message || '未知错误'), '❌');
+      }
+    });
+
+    /* ---------------- 7.1 Supabase 云端数据同步交互 ---------------- */
+    const cloudSyncBtn = document.getElementById('cloud-sync-btn');
+    const cloudStatusDot = document.getElementById('cloud-status-dot');
+    const cloudModal = document.getElementById('cloud-modal');
+    const cloudModalContent = document.getElementById('cloud-modal-content');
+    const closeCloudModalBtn = document.getElementById('close-cloud-modal-btn');
+    const cloudStatusText = document.getElementById('cloud-status-text');
+    const cloudCountRow = document.getElementById('cloud-count-row');
+    const cloudWordsCount = document.getElementById('cloud-words-count');
+    const cloudProgressBox = document.getElementById('cloud-progress-box');
+    const cloudProgressTitle = document.getElementById('cloud-progress-title');
+    const cloudProgressPercent = document.getElementById('cloud-progress-percent');
+    const cloudProgressBar = document.getElementById('cloud-progress-bar');
+    const cloudPushBtn = document.getElementById('cloud-push-btn');
+    const cloudPullBtn = document.getElementById('cloud-pull-btn');
+    const copySqlBtn = document.getElementById('copy-sql-btn');
+
+    // 打开与关闭云端弹窗
+    function openCloudModal() {
+      if (!cloudModal) return;
+      cloudModal.classList.remove('opacity-0', 'pointer-events-none');
+      cloudModalContent.classList.remove('scale-95');
+      checkAndUpdateCloudStatus();
+    }
+
+    function closeCloudModal() {
+      if (!cloudModal) return;
+      cloudModal.classList.add('opacity-0', 'pointer-events-none');
+      cloudModalContent.classList.add('scale-95');
+      cloudProgressBox.classList.add('hidden');
+    }
+
+    cloudSyncBtn?.addEventListener('click', openCloudModal);
+    closeCloudModalBtn?.addEventListener('click', closeCloudModal);
+    cloudModal?.addEventListener('click', (e) => {
+      if (e.target === cloudModal) closeCloudModal();
+    });
+
+    // 状态检测与 UI 刷新
+    async function checkAndUpdateCloudStatus() {
+      if (!cloudStatusText) return;
+      cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-400 animate-ping"></span> 检测中...';
+      
+      const res = await SupabaseService.checkConnection();
+      if (res.ok) {
+        if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+        cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span class="text-emerald-600 dark:text-emerald-400 font-bold">已连接，同步正常</span>';
+        if (cloudCountRow) {
+          cloudCountRow.classList.remove('hidden');
+          cloudWordsCount.textContent = `${res.cloudCount} 词`;
+        }
+      } else if (res.state === 'table_missing') {
+        if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+        cloudStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span class="text-amber-600 dark:text-amber-400 font-bold">待执行 SQL 建表</span>';
+        if (cloudCountRow) cloudCountRow.classList.add('hidden');
+      } else {
+        if (cloudStatusDot) cloudStatusDot.className = 'absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-zinc-900 transition-colors shadow-xs';
+        cloudStatusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span class="text-rose-500 font-bold">${escapeHtml(res.message || '连接失败')}</span>`;
+        if (cloudCountRow) cloudCountRow.classList.add('hidden');
+      }
+    }
+
+    // 页面初始化时后台静默检测连接状态
+    setTimeout(checkAndUpdateCloudStatus, 800);
+
+    // 一键复制 SQL 建表语句
+    copySqlBtn?.addEventListener('click', () => {
+      const sqlCode = document.getElementById('sql-code-block')?.textContent || '';
+      if (!sqlCode) return;
+      navigator.clipboard.writeText(sqlCode).then(() => {
+        showToast('建表 SQL 已复制到剪贴板！', '📋');
+      }).catch(() => {
+        showToast('请直接选中文本手动复制', '⚠️');
+      });
+    });
+
+    // 一键上传本地数据至 Supabase
+    cloudPushBtn?.addEventListener('click', async () => {
+      try {
+        cloudPushBtn.disabled = true;
+        cloudPullBtn.disabled = true;
+        cloudProgressBox.classList.remove('hidden');
+        cloudProgressTitle.textContent = '正在分批上传词库与打卡记录...';
+        cloudProgressPercent.textContent = '0%';
+        cloudProgressBar.style.width = '0%';
+
+        const result = await SupabaseService.pushAllToCloud(({ percent, current, total }) => {
+          cloudProgressPercent.textContent = `${percent}%`;
+          cloudProgressBar.style.width = `${percent}%`;
+          cloudProgressTitle.textContent = `已同步 ${current} / ${total} 词 (${percent}%)`;
+        });
+
+        HapticService.celebrate();
+        showToast(`云端同步成功！已备份 ${result.total} 个词汇与学习数据`, '☁️');
+        await checkAndUpdateCloudStatus();
+      } catch (err) {
+        console.error('云端推送失败:', err);
+        showToast('同步失败：' + (err.message || '请确认已在 Supabase 执行建表 SQL'), '❌');
+      } finally {
+        cloudPushBtn.disabled = false;
+        cloudPullBtn.disabled = false;
+        setTimeout(() => {
+          cloudProgressBox.classList.add('hidden');
+        }, 1500);
+      }
+    });
+
+    // 从 Supabase 拉取最新记录
+    cloudPullBtn?.addEventListener('click', async () => {
+      try {
+        cloudPushBtn.disabled = true;
+        cloudPullBtn.disabled = true;
+        cloudProgressBox.classList.remove('hidden');
+        cloudProgressTitle.textContent = '正在从云端拉取全量数据...';
+        cloudProgressPercent.textContent = '50%';
+        cloudProgressBar.style.width = '50%';
+
+        const result = await SupabaseService.pullAllFromCloud();
+
+        cloudProgressPercent.textContent = '100%';
+        cloudProgressBar.style.width = '100%';
+
+        if (result.total === 0) {
+          showToast('云端暂无词汇记录，可先点击“上传备份”', 'ℹ️');
+        } else {
+          // 重新读取词汇
+          allVocabulary = await DataService.getWords();
+          practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+          initialDueCount = practiceQueue.length;
+          completedTodayCount = 0;
+          isFreePracticeMode = false;
+          currentIndex = 0;
+          isFlipped = false;
+
+          if (practiceQueue.length === 0) {
+            renderCompletedState(true);
+          } else {
+            renderCurrentWord();
+          }
+          updateProgress();
+          renderLibraryView();
+          renderStatsOverview();
+          checkAndNotifyAchievements();
+
+          HapticService.success();
+          showToast(`已成功同步云端数据！本地现收录 ${allVocabulary.length} 词`, '📥');
+        }
+        await checkAndUpdateCloudStatus();
+      } catch (err) {
+        console.error('云端拉取失败:', err);
+        showToast('拉取失败：' + (err.message || '请检查网络或 Supabase 配置'), '❌');
+      } finally {
+        cloudPushBtn.disabled = false;
+        cloudPullBtn.disabled = false;
+        setTimeout(() => {
+          cloudProgressBox.classList.add('hidden');
+        }, 1200);
       }
     });
 

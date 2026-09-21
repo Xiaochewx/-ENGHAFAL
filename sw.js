@@ -7,7 +7,7 @@
  * 3. 导航离线兜底：断网时刷新或进入页面依然秒级加载已缓存的 index.html
  */
 
-const CACHE_NAME = 'bubei-vocab-pwa-v6';
+const CACHE_NAME = 'bubei-vocab-pwa-v7';
 
 // 核心预缓存资源列表
 const PRECACHE_ASSETS = [
@@ -19,7 +19,8 @@ const PRECACHE_ASSETS = [
   './icon.svg',
   './icon-192.png',
   './icon-512.png',
-  'https://cdn.tailwindcss.com'
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
 // 1. Install 阶段：预缓存核心静态资源并跳过等待

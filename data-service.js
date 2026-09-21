@@ -11,6 +11,266 @@
 const OLD_STORAGE_KEY = 'bubei_vocabulary_v1';
 const STORAGE_KEY = 'bubei_academic_vocab_v2';
 
+/**
+ * ---------------- Supabase 云端同步配置与服务 ----------------
+ */
+const SUPABASE_CONFIG = {
+  url: 'https://abzacuzhggyvlqwwtlyj.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiemFjdXpoZ2d5dmxxd3d0bHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyODE5NzIsImV4cCI6MjEwNDg1Nzk3Mn0.cZ6o_p7maiPH18KtuBBSRWfwDmC8Eb1j6ePIi7aBWuE'
+};
+
+const SupabaseService = {
+  client: null,
+  isInitialized: false,
+  connectionState: 'idle', // 'idle' | 'connected' | 'table_missing' | 'error'
+
+  getClient() {
+    if (this.client) return this.client;
+    if (typeof window !== 'undefined' && window.supabase && window.supabase.createClient) {
+      try {
+        this.client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        this.isInitialized = true;
+      } catch (e) {
+        console.warn('[SupabaseService] 初始化客户端异常:', e);
+      }
+    }
+    return this.client;
+  },
+
+  /**
+   * 检测 Supabase 连接状态与数据表就绪情况
+   */
+  async checkConnection() {
+    const client = this.getClient();
+    if (!client) {
+      this.connectionState = 'error';
+      return { ok: false, state: 'sdk_missing', message: 'Supabase SDK 尚未加载或当前处于离线模式' };
+    }
+
+    try {
+      // 探测 words 表
+      const { data, error, count } = await client
+        .from('words')
+        .select('id', { count: 'exact', head: true });
+
+      if (error) {
+        if (error.code === 'PGRST205' || (error.message && error.message.includes('schema cache'))) {
+          this.connectionState = 'table_missing';
+          return { ok: false, state: 'table_missing', message: '已成功连通 Supabase！但数据表尚未初始化，请先在 Supabase SQL Editor 中执行建表' };
+        }
+        this.connectionState = 'error';
+        return { ok: false, state: 'error', message: error.message || '连接异常' };
+      }
+
+      this.connectionState = 'connected';
+      return { ok: true, state: 'connected', cloudCount: count || 0, message: '云端数据库连接正常' };
+    } catch (err) {
+      this.connectionState = 'error';
+      return { ok: false, state: 'error', message: err.message || '网络连接异常' };
+    }
+  },
+
+  /**
+   * 同步单个单词到云端（异步静默执行，不阻塞本地）
+   */
+  async syncWord(word) {
+    const client = this.getClient();
+    if (!client || this.connectionState === 'table_missing') return;
+    try {
+      const payload = {
+        id: word.id,
+        word: word.word,
+        phonetic: word.phonetic || '',
+        partOfSpeech: word.partOfSpeech || 'n.',
+        definition: word.definition || '',
+        exampleEn: word.exampleEn || '',
+        exampleCn: word.exampleCn || '',
+        tags: Array.isArray(word.tags) ? word.tags : [],
+        status: word.status || 'new',
+        reviewCount: Number(word.reviewCount) || 0,
+        interval: Number(word.interval) || 0,
+        nextReviewDate: Number(word.nextReviewDate) || Date.now(),
+        lastReviewedAt: word.lastReviewedAt || null,
+        userNotes: word.userNotes || '',
+        createdAt: word.createdAt || Date.now(),
+        lastModifiedAt: word.lastModifiedAt || Date.now()
+      };
+      await client.from('words').upsert(payload, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('[SupabaseService] 单词同步静默捕获:', e);
+    }
+  },
+
+  /**
+   * 从云端删除单词
+   */
+  async deleteWord(id) {
+    const client = this.getClient();
+    if (!client || this.connectionState === 'table_missing') return;
+    try {
+      await client.from('words').delete().eq('id', id);
+    } catch (e) {
+      console.warn('[SupabaseService] 删除单词同步静默捕获:', e);
+    }
+  },
+
+  /**
+   * 同步统计与打卡数据到云端
+   */
+  async syncStats(stats) {
+    const client = this.getClient();
+    if (!client || this.connectionState === 'table_missing') return;
+    try {
+      const payload = {
+        id: 'global_user_stats',
+        dailyCounts: stats.dailyCounts || {},
+        checkInDates: stats.checkInDates || [],
+        bestStreak: Number(stats.bestStreak) || 0,
+        lastActiveDate: stats.lastActiveDate || '',
+        updatedAt: Date.now()
+      };
+      await client.from('study_stats').upsert(payload, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('[SupabaseService] 打卡数据同步静默捕获:', e);
+    }
+  },
+
+  /**
+   * 分批全量推送本地数据到云端
+   * @param {(progress: { percent: number, current: number, total: number }) => void} [onProgress]
+   */
+  async pushAllToCloud(onProgress) {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase 客户端尚未初始化');
+
+    const words = await DataService.getWords();
+    const stats = StatsService.getStats();
+
+    // 1. 同步学习打卡记录
+    await this.syncStats(stats);
+
+    // 2. 分批次同步全部词汇（每批 200 词，兼顾速度与稳定性）
+    const batchSize = 200;
+    const total = words.length;
+
+    for (let i = 0; i < total; i += batchSize) {
+      const batch = words.slice(i, i + batchSize).map(w => ({
+        id: w.id,
+        word: w.word,
+        phonetic: w.phonetic || '',
+        partOfSpeech: w.partOfSpeech || 'n.',
+        definition: w.definition || '',
+        exampleEn: w.exampleEn || '',
+        exampleCn: w.exampleCn || '',
+        tags: Array.isArray(w.tags) ? w.tags : [],
+        status: w.status || 'new',
+        reviewCount: Number(w.reviewCount) || 0,
+        interval: Number(w.interval) || 0,
+        nextReviewDate: Number(w.nextReviewDate) || Date.now(),
+        lastReviewedAt: w.lastReviewedAt || null,
+        userNotes: w.userNotes || '',
+        createdAt: w.createdAt || Date.now(),
+        lastModifiedAt: w.lastModifiedAt || Date.now()
+      }));
+
+      const { error } = await client.from('words').upsert(batch, { onConflict: 'id' });
+      if (error) throw error;
+
+      const current = Math.min(i + batchSize, total);
+      if (typeof onProgress === 'function') {
+        onProgress({
+          percent: Math.round((current / total) * 100),
+          current,
+          total
+        });
+      }
+    }
+
+    return { total };
+  },
+
+  /**
+   * 从云端拉取全量数据并合并到本地
+   */
+  async pullAllFromCloud() {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase 客户端尚未初始化');
+
+    // 1. 拉取打卡记录
+    try {
+      const { data: statsData } = await client
+        .from('study_stats')
+        .select('*')
+        .eq('id', 'global_user_stats')
+        .single();
+
+      if (statsData) {
+        const localStats = StatsService.getStats();
+        const mergedCheckIns = Array.from(new Set([...(localStats.checkInDates || []), ...(statsData.checkInDates || [])])).sort();
+        const mergedCounts = { ...(localStats.dailyCounts || {}), ...(statsData.dailyCounts || {}) };
+        const mergedStreak = Math.max(localStats.bestStreak || 0, statsData.bestStreak || 0);
+        const newStats = {
+          dailyCounts: mergedCounts,
+          checkInDates: mergedCheckIns,
+          bestStreak: mergedStreak,
+          lastActiveDate: statsData.lastActiveDate || localStats.lastActiveDate
+        };
+        StatsService.saveStats(newStats);
+      }
+    } catch (e) {
+      console.warn('[SupabaseService] 拉取打卡记录警告:', e);
+    }
+
+    // 2. 分页拉取云端词库
+    let allCloudWords = [];
+    let from = 0;
+    const step = 1000;
+
+    while (true) {
+      const { data, error } = await client
+        .from('words')
+        .select('*')
+        .range(from, from + step - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allCloudWords.push(...data);
+      if (data.length < step) break;
+      from += step;
+    }
+
+    if (allCloudWords.length === 0) {
+      return { total: 0, added: 0, updated: 0 };
+    }
+
+    // 标准化数据格式并安全合并至本地
+    const normalized = allCloudWords.map(item => ({
+      id: item.id,
+      word: item.word,
+      phonetic: item.phonetic || '',
+      partOfSpeech: item.partOfSpeech || item.part_of_speech || 'n.',
+      definition: item.definition || '',
+      exampleEn: item.exampleEn || item.example_en || '',
+      exampleCn: item.exampleCn || item.example_cn || '',
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      status: item.status || 'new',
+      reviewCount: Number(item.reviewCount || item.review_count) || 0,
+      interval: Number(item.interval) || 0,
+      nextReviewDate: Number(item.nextReviewDate || item.next_review_date) || Date.now(),
+      lastReviewedAt: item.lastReviewedAt || item.last_reviewed_at || null,
+      userNotes: item.userNotes || item.user_notes || '',
+      createdAt: item.createdAt || item.created_at || Date.now()
+    }));
+
+    const result = await DataService.importBackup(normalized, 'merge');
+    return {
+      total: allCloudWords.length,
+      added: result.added,
+      updated: result.updated
+    };
+  }
+};
+
 const DataService = {
   /**
    * 初始化存储数据（如果 LocalStorage 中无数据，则使用 INITIAL_VOCABULARY 自动填充）
@@ -193,6 +453,7 @@ const DataService = {
 
         list.push(newWord);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        SupabaseService.syncWord(newWord).catch(() => {});
         resolve(newWord);
       } catch (err) {
         console.error('[DataService] addWord 异常:', err);
@@ -227,6 +488,7 @@ const DataService = {
 
         list[index] = updatedItem;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        SupabaseService.syncWord(updatedItem).catch(() => {});
         resolve(updatedItem);
       } catch (err) {
         console.error('[DataService] updateWord 异常:', err);
@@ -253,6 +515,7 @@ const DataService = {
         }
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        SupabaseService.deleteWord(id).catch(() => {});
         resolve(true);
       } catch (err) {
         console.error('[DataService] deleteWord 异常:', err);
@@ -591,6 +854,7 @@ const StatsService = {
   saveStats(stats) {
     try {
       localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats));
+      SupabaseService.syncStats(stats).catch(() => {});
     } catch (e) {
       console.warn('[StatsService] saveStats 异常:', e);
     }
@@ -983,7 +1247,9 @@ if (typeof window !== 'undefined') {
   window.SRSService = SRSService;
   window.StatsService = StatsService;
   window.AchievementService = AchievementService;
+  window.SupabaseService = SupabaseService;
+  window.SUPABASE_CONFIG = SUPABASE_CONFIG;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DataService, SRSService, StatsService, AchievementService };
+  module.exports = { DataService, SRSService, StatsService, AchievementService, SupabaseService, SUPABASE_CONFIG };
 }
