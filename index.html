@@ -12,9 +12,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="不背英语">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -167,14 +168,8 @@
     <header class="flex-shrink-0 px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/70 flex items-center justify-between">
       <!-- 左侧：App 图标与标题 -->
       <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-xl bg-gold-50 dark:bg-gold-950/40 border border-gold-200/60 dark:border-gold-800/40 flex items-center justify-center text-gold-500 shadow-sm">
-          <!-- 扁平金色矢量图标：书籍 -->
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-            <path d="M12 6v6"></path>
-            <path d="M9 9h6"></path>
-          </svg>
+        <div class="w-9 h-9 rounded-xl overflow-hidden bg-white dark:bg-zinc-800 border border-gold-300/60 dark:border-gold-800/40 flex items-center justify-center shadow-xs flex-shrink-0">
+          <img src="icon-192.png" alt="不背英语 Logo" class="w-full h-full object-contain p-0.5">
         </div>
         <div>
           <h1 class="font-bold text-base tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-1.5">
@@ -950,6 +945,18 @@
             <span>导入</span>
           </button>
 
+          <!-- 重置应用按钮 -->
+          <button id="library-reset-btn" type="button" title="重置应用至初始状态" 
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium transition-all text-xs active:scale-95">
+            <svg class="w-3.5 h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+              <path d="M21 3v5h-5"></path>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+              <path d="M3 21v-5h5"></path>
+            </svg>
+            <span>重置</span>
+          </button>
+
           <!-- 录入生词按钮 -->
           <button id="library-quick-add-btn" type="button" 
                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gold-500 hover:bg-gold-600 text-white font-semibold transition-all text-xs shadow-gold-subtle active:scale-95">
@@ -1565,6 +1572,160 @@ create policy "Allow public words" on public.words for all using (true) with che
 create policy "Allow public stats" on public.study_stats for all using (true) with check (true);</code></pre>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ==================== 应用偏好与数据管理模态弹窗 (Settings Modal) ==================== -->
+  <div id="settings-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
+    <div id="settings-modal-content" class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200/90 dark:border-zinc-800 p-6 transform transition-all duration-300 scale-95 text-left max-h-[90vh] overflow-y-auto">
+      
+      <!-- 弹窗顶部栏 -->
+      <div class="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-gold-50 dark:bg-gold-950/60 text-gold-500 border border-gold-200/60 dark:border-gold-800/40 flex items-center justify-center shadow-sm">
+            <svg class="w-4 h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-zinc-900 dark:text-zinc-50 leading-tight">偏好设置与数据管理</h3>
+            <p class="text-[11px] text-zinc-400">词库存储 · 备份同步 · 应用状态</p>
+          </div>
+        </div>
+        <button id="close-settings-modal-btn" type="button" aria-label="关闭弹窗" 
+                class="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          <svg class="w-4 h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="my-4 space-y-4">
+        <!-- 存储与词库信息 -->
+        <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-750 text-xs">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium">持久化存储引擎:</span>
+            <span class="font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-300/40">IndexedDB (海量无上限)</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-zinc-500 dark:text-zinc-400 font-medium">当前词库总量:</span>
+            <span id="settings-word-count" class="font-mono font-bold text-zinc-800 dark:text-zinc-200">5,998 词</span>
+          </div>
+        </div>
+
+        <!-- 备份与恢复管理 -->
+        <div class="space-y-2">
+          <h4 class="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <span>💾</span> 数据备份与恢复
+          </h4>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="settings-export-btn" type="button" 
+                    class="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
+              <div class="flex items-center gap-2 mb-1">
+                <svg class="w-4 h-4 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">导出备份</span>
+              </div>
+              <p class="text-[10px] text-zinc-400">下载当前词库 JSON 档案</p>
+            </button>
+
+            <button id="settings-import-btn" type="button" 
+                    class="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 text-left transition-all active:scale-[0.98]">
+              <div class="flex items-center gap-2 mb-1">
+                <svg class="w-4 h-4 text-gold-600 dark:text-gold-400 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">导入恢复</span>
+              </div>
+              <p class="text-[10px] text-zinc-400">上传恢复词库备份档案</p>
+            </button>
+          </div>
+
+          <button id="settings-cloud-btn" type="button" 
+                  class="w-full p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 hover:bg-gold-50 dark:hover:bg-gold-950/40 border border-zinc-200 dark:border-zinc-700 hover:border-gold-300 flex items-center justify-between text-left transition-all active:scale-[0.98]">
+            <div class="flex items-center gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>
+              </div>
+              <div>
+                <h5 class="text-xs font-bold text-zinc-900 dark:text-zinc-100">Supabase 云端同步管理</h5>
+                <p class="text-[10px] text-zinc-400">跨设备同步背词记录与复习排期</p>
+              </div>
+            </div>
+            <span class="text-xs text-gold-600 dark:text-gold-400 font-medium">查看 →</span>
+          </button>
+        </div>
+
+        <!-- 危险区域：重置应用 -->
+        <div class="p-3.5 rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+              <span>⚠️</span> 危险区域
+            </span>
+            <span class="text-[10px] text-zinc-400">不可撤销</span>
+          </div>
+          <p class="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            如遇数据异常或需清空重新学习，可将整个应用重置回最初出厂状态。
+          </p>
+          <button id="settings-trigger-reset-btn" type="button" 
+                  class="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+              <path d="M21 3v5h-5"></path>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+              <path d="M3 21v-5h5"></path>
+            </svg>
+            <span>重置整个应用 (恢复出厂设置)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-zinc-100 dark:border-zinc-800 text-right">
+        <button id="settings-done-btn" type="button" 
+                class="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-semibold text-xs transition-colors">
+          完成
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== 重置应用确认模态弹窗 (Reset Confirm Modal) ==================== -->
+  <div id="reset-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
+    <div id="reset-modal-content" class="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200/90 dark:border-zinc-800 p-6 transform transition-all duration-300 scale-95 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 border border-rose-200/60 dark:border-rose-800/40 flex items-center justify-center mx-auto mb-3.5 shadow-xs">
+        <svg class="w-6 h-6 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+          <path d="M21 3v5h-5"></path>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+          <path d="M3 21v-5h5"></path>
+        </svg>
+      </div>
+      <h3 class="text-base font-bold text-zinc-900 dark:text-zinc-50 mb-1">确认重置整个应用？</h3>
+      <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-3 leading-relaxed">
+        此操作将清空所有记忆进度、自定义生词、打卡连续天数及成就徽章，并恢复为出厂 5,998 初始词库。
+      </p>
+      <div class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-[11px] text-amber-700 dark:text-amber-300 mb-4 text-left flex items-start gap-2">
+        <span class="text-base leading-none">⚠️</span>
+        <span>该操作不可撤销！若有重要自定义词条或学习数据，建议在重置前先进行【导出备份】。</span>
+      </div>
+      <div class="flex items-center justify-center gap-2.5">
+        <button id="cancel-reset-btn" type="button" 
+                class="flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+          取消
+        </button>
+        <button id="confirm-reset-btn" type="button" 
+                class="flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 transition-all shadow-sm">
+          确认清空并重置
+        </button>
+      </div>
     </div>
   </div>
 
@@ -3030,6 +3191,8 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
         (deleteModal && !deleteModal.classList.contains('opacity-0')) ||
         (importModal && !importModal.classList.contains('opacity-0')) ||
         (cloudModal && !cloudModal.classList.contains('opacity-0')) ||
+        (settingsModal && !settingsModal.classList.contains('opacity-0')) ||
+        (resetModal && !resetModal.classList.contains('opacity-0')) ||
         (achievementModal && !achievementModal.classList.contains('opacity-0'));
 
       if (isAnyModalOpen) {
@@ -3725,6 +3888,14 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
     // History API 浏览器前进/后退/手机侧滑返回拦截与弹窗安全关闭
     window.addEventListener('popstate', (e) => {
       // 1. 优先检查并关闭顶层开启的弹窗
+      if (resetModal && !resetModal.classList.contains('opacity-0')) {
+        closeResetModal();
+        return;
+      }
+      if (settingsModal && !settingsModal.classList.contains('opacity-0')) {
+        closeSettingsModal();
+        return;
+      }
       if (achievementModal && !achievementModal.classList.contains('opacity-0')) {
         closeAchievementModal();
         return;
@@ -4198,13 +4369,125 @@ create policy "Allow public stats" on public.study_stats for all using (true) wi
 
     exportBackupBtn?.addEventListener('click', handleExportBackup);
 
-    // 头部设置图标快捷提示
-    settingsBtn?.addEventListener('click', () => {
-      if (currentTab !== 'library') {
-        switchTab('library');
+    // 应用偏好设置与数据管理弹窗元素
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsModalContent = document.getElementById('settings-modal-content');
+    const closeSettingsModalBtn = document.getElementById('close-settings-modal-btn');
+    const settingsDoneBtn = document.getElementById('settings-done-btn');
+    const settingsWordCount = document.getElementById('settings-word-count');
+    const settingsExportBtn = document.getElementById('settings-export-btn');
+    const settingsImportBtn = document.getElementById('settings-import-btn');
+    const settingsCloudBtn = document.getElementById('settings-cloud-btn');
+    const settingsTriggerResetBtn = document.getElementById('settings-trigger-reset-btn');
+
+    // 重置模态弹窗元素
+    const resetModal = document.getElementById('reset-modal');
+    const resetModalContent = document.getElementById('reset-modal-content');
+    const cancelResetBtn = document.getElementById('cancel-reset-btn');
+    const confirmResetBtn = document.getElementById('confirm-reset-btn');
+    const libraryResetBtn = document.getElementById('library-reset-btn');
+
+    function openSettingsModal() {
+      if (!settingsModal) return;
+      if (settingsWordCount) {
+        settingsWordCount.textContent = `${allVocabulary.length} 词`;
       }
-      showToast('可在此处一键导出备份或上传恢复数据', '💡');
+      settingsModal.classList.remove('opacity-0', 'pointer-events-none');
+      settingsModal.classList.add('opacity-100', 'pointer-events-auto');
+      settingsModalContent?.classList.remove('scale-95');
+      settingsModalContent?.classList.add('scale-100');
+    }
+
+    function closeSettingsModal() {
+      if (!settingsModal) return;
+      settingsModal.classList.remove('opacity-100', 'pointer-events-auto');
+      settingsModal.classList.add('opacity-0', 'pointer-events-none');
+      settingsModalContent?.classList.remove('scale-100');
+      settingsModalContent?.classList.add('scale-95');
+    }
+
+    function openResetModal() {
+      if (!resetModal) return;
+      resetModal.classList.remove('opacity-0', 'pointer-events-none');
+      resetModal.classList.add('opacity-100', 'pointer-events-auto');
+      resetModalContent?.classList.remove('scale-95');
+      resetModalContent?.classList.add('scale-100');
+    }
+
+    function closeResetModal() {
+      if (!resetModal) return;
+      resetModal.classList.remove('opacity-100', 'pointer-events-auto');
+      resetModal.classList.add('opacity-0', 'pointer-events-none');
+      resetModalContent?.classList.remove('scale-100');
+      resetModalContent?.classList.add('scale-95');
+    }
+
+    async function handleConfirmReset() {
+      try {
+        confirmResetBtn.disabled = true;
+        confirmResetBtn.textContent = '正在重置...';
+
+        const freshWords = await DataService.resetApp({ resetStats: true, resetAchievements: true });
+
+        allVocabulary = freshWords;
+        tabLibraryBadge.textContent = allVocabulary.length;
+        practiceQueue = SRSService.generateTodayTasks(allVocabulary);
+        initialDueCount = practiceQueue.length;
+        completedTodayCount = 0;
+        isFreePracticeMode = false;
+        currentIndex = 0;
+        isFlipped = false;
+        reviewHistoryStack = [];
+        updateUndoButtonState();
+
+        closeResetModal();
+        closeSettingsModal();
+
+        updateProgress();
+        renderCurrentWord();
+        updateHeaderStreak();
+        renderLibraryView();
+        renderAchievementsShowcase();
+
+        HapticService.celebrate();
+        showToast('应用已成功重置为出厂初始状态！🎉', '✨');
+      } catch (err) {
+        console.error('重置应用失败:', err);
+        showToast('重置应用失败，请重试', '❌');
+      } finally {
+        confirmResetBtn.disabled = false;
+        confirmResetBtn.textContent = '确认清空并重置';
+      }
+    }
+
+    settingsBtn?.addEventListener('click', openSettingsModal);
+    closeSettingsModalBtn?.addEventListener('click', closeSettingsModal);
+    settingsDoneBtn?.addEventListener('click', closeSettingsModal);
+    settingsModal?.addEventListener('click', (e) => {
+      if (e.target === settingsModal) closeSettingsModal();
     });
+
+    settingsExportBtn?.addEventListener('click', () => {
+      handleExportBackup();
+    });
+    settingsImportBtn?.addEventListener('click', () => {
+      closeSettingsModal();
+      backupFileInput.click();
+    });
+    settingsCloudBtn?.addEventListener('click', () => {
+      closeSettingsModal();
+      openCloudModal();
+    });
+
+    settingsTriggerResetBtn?.addEventListener('click', () => {
+      openResetModal();
+    });
+    libraryResetBtn?.addEventListener('click', openResetModal);
+    cancelResetBtn?.addEventListener('click', closeResetModal);
+    resetModal?.addEventListener('click', (e) => {
+      if (e.target === resetModal) closeResetModal();
+    });
+    confirmResetBtn?.addEventListener('click', handleConfirmReset);
 
     // 2. 导入恢复：选择 JSON 文件并解析
     importBackupBtn?.addEventListener('click', () => {

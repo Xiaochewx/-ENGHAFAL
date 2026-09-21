@@ -798,6 +798,43 @@ const DataService = {
     })) : [];
     await this._persistWords(seedData);
     return seedData;
+  },
+
+  /**
+   * 重置整个应用（恢复出厂设置）
+   * 清空复习进度、自建词条、打卡天数与成就徽章，重新载入初始词库
+   * @param {{ resetStats?: boolean, resetAchievements?: boolean }} [options]
+   * @returns {Promise<Array>}
+   */
+  async resetApp(options = { resetStats: true, resetAchievements: true }) {
+    // 1. 重建词库数据为纯净初始种子词
+    const seedData = (typeof INITIAL_VOCABULARY !== 'undefined') ? INITIAL_VOCABULARY.map(w => ({
+      ...w,
+      interval: 0,
+      nextReviewDate: Date.now(),
+      lastReviewedAt: null,
+      reviewCount: 0,
+      status: 'new'
+    })) : [];
+    await this._persistWords(seedData);
+
+    // 2. 清空连续打卡与学习统计
+    if (options.resetStats) {
+      localStorage.removeItem('bubei_review_streak_stats');
+      if (typeof StatsService !== 'undefined') {
+        StatsService.init();
+      }
+    }
+
+    // 3. 清空成就徽章解锁
+    if (options.resetAchievements) {
+      localStorage.removeItem('bubei_achievements_v1');
+      if (typeof AchievementService !== 'undefined') {
+        AchievementService.init();
+      }
+    }
+
+    return seedData;
   }
 };
 

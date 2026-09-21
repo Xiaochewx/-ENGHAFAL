@@ -7,7 +7,7 @@
  * 3. 导航离线兜底：断网时刷新或进入页面依然秒级加载已缓存的 index.html
  */
 
-const CACHE_NAME = 'bubei-vocab-pwa-v8';
+const CACHE_NAME = 'bubei-vocab-pwa-v9';
 
 // 核心预缓存资源列表（仅包含同源高稳定静态资源，避免跨域 CDN 在 install 阶段因 CORS 报错）
 const PRECACHE_ASSETS = [
@@ -18,7 +18,8 @@ const PRECACHE_ASSETS = [
   './words.js',
   './icon.svg',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './apple-touch-icon.png'
 ];
 
 // 监听客户端 skipWaiting 消息，支持无缝版本热更新
